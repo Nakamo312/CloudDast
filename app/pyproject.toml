@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloud-dast-app"
+version = "0.1.0"
+description = "Cloud DAST application composition root"
+requires-python = "~=3.12.0"
+dependencies = [
+    "cloud-dast-core==0.1.0",
+    "cloud-dast-reporting==0.1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv.sources]
+cloud-dast-core = { path = "../packages/core" }
+cloud-dast-reporting = { path = "../packages/reporting" }
