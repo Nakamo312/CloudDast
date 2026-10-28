@@ -1,0 +1,350 @@
+schema_version: 1
+entries:
+  - class_id: bola
+    title: Broken Object Level Authorization
+    owasp_api: API1
+    effect_constructors: [allowed, identity]
+    primitives: [outcome]
+    norm_source: iam_ownership
+    cwe: [CWE-639, CWE-284]
+    stride: [E]
+    default_effects: [identity]
+    input_roles: [object_ref]
+    status: active
+    note: object-level norm targets a concrete resource
+
+  - class_id: broken_authentication
+    title: Broken Authentication
+    owasp_api: API2
+    effect_constructors: [allowed, identity]
+    primitives: [outcome]
+    norm_source: endpoint_layer
+    cwe: [CWE-306, CWE-287]
+    stride: [S]
+    status: active
+    note: anonymous identity must not reach the method
+
+  - class_id: excessive_exposure
+    title: Excessive Data Exposure
+    owasp_api: API3
+    effect_constructors: [has]
+    primitives: [response_field]
+    norm_source: role_field_visibility
+    cwe: [CWE-200, CWE-209]
+    stride: [I]
+    default_effects: [has]
+    witness_roles: [sensitive, credential, privileged]
+    status: active
+    note: forbidden response field is present for this principal
+
+  - class_id: mass_assignment
+    title: Mass Assignment
+    owasp_api: API3
+    effect_constructors: [changed]
+    primitives: [differential]
+    norm_source: role_field_visibility
+    cwe: [CWE-915]
+    stride: [T]
+    input_roles: [privileged]
+    status: active
+    note: paired read-back proves a privileged field changed
+
+  - class_id: resource_exhaustion
+    title: Unrestricted Resource Consumption
+    owasp_api: API4
+    effect_constructors: [duration]
+    primitives: [latency_bound]
+    norm_source: generic_limit
+    cwe: [CWE-400, CWE-770]
+    stride: [D]
+    default_effects: [duration]
+    status: active
+    note: runtime latency baseline is required before a finding
+
+  - class_id: function_level_authz
+    title: Broken Function Level Authorization
+    owasp_api: API5
+    effect_constructors: [allowed]
+    primitives: [outcome]
+    norm_source: iam
+    cwe: [CWE-285, CWE-284]
+    stride: [E]
+    default_effects: [allowed]
+    status: active
+    note: method-level norm has no concrete resource
+
+  - class_id: business_flow_abuse
+    title: Unrestricted Access to Sensitive Business Flows
+    owasp_api: API6
+    effect_constructors: [completed, reached]
+    primitives: [sequence, marker]
+    norm_source: business_flow
+    cwe: [CWE-840]
+    stride: [T]
+    default_effects: [completed]
+    sink_types: [business_flow]
+    status: active
+    note: grounded sequence or typed business-flow sink
+
+  - class_id: ssrf
+    title: Server-Side Request Forgery
+    owasp_api: API7
+    effect_constructors: [external_call]
+    primitives: [oob_event]
+    norm_source: none
+    cwe: [CWE-918]
+    stride: [E]
+    default_effects: [external_call]
+    status: active
+    note: callback marker proves an attacker-directed outbound request
+
+  - class_id: security_misconfiguration
+    title: Security Misconfiguration
+    owasp_api: API8
+    effect_constructors: [changed]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-16]
+    stride: [I]
+    status: planned
+    requires_primitive: differential_pairing
+    note: verbose/error differential analysis only
+
+  - class_id: improper_inventory
+    title: Improper Inventory Management
+    owasp_api: API9
+    effect_constructors: [allowed]
+    primitives: [outcome]
+    norm_source: contract_graph
+    cwe: [CWE-1059]
+    stride: [E]
+    status: planned
+    requires_primitive: inventory_diff
+    note: live endpoint versus graph lifecycle state
+
+  - class_id: unsafe_api_consumption
+    title: Unsafe Consumption of APIs
+    owasp_api: API10
+    effect_constructors: [changed]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-20, CWE-200, CWE-319]
+    stride: [T]
+    status: planned
+    requires_primitive: downstream_double
+    note: requires a downstream test double
+
+  - class_id: privilege_escalation_chain
+    title: Privilege Escalation Chain
+    owasp_api: API5
+    effect_constructors: [completed]
+    primitives: [sequence]
+    norm_source: iam
+    cwe: [CWE-269]
+    stride: [E]
+    status: active
+    note: multi-step DAG confirmed by grounded outcome checks
+
+  - class_id: injection
+    title: Injection
+    owasp_api: A03
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: dataflow
+    cwe: [CWE-94]
+    stride: [T]
+    sink_types: [interpreter]
+    status: active
+    note: attacker-controlled input reached an interpreter sink
+
+  - class_id: sql_injection
+    title: SQL Injection
+    owasp_api: A03
+    effect_constructors: [duration]
+    primitives: [latency_bound]
+    norm_source: none
+    cwe: [CWE-89]
+    stride: [T]
+    status: active
+    note: time-based oracle; boolean/error modes need differential pairing
+
+  - class_id: command_injection
+    title: Command Injection / RCE
+    owasp_api: A03
+    effect_constructors: [external_call, reached]
+    primitives: [oob_event, marker]
+    norm_source: none
+    cwe: [CWE-78]
+    stride: [T]
+    sink_types: [command_shell]
+    status: active
+    note: marker reaches a command-shell sink
+
+  - class_id: ssti
+    title: Server-Side Template Injection
+    owasp_api: A03
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-1336, CWE-94]
+    stride: [T]
+    sink_types: [template_engine]
+    status: active
+    note: marker reaches a template-engine sink
+
+  - class_id: xxe
+    title: XML External Entity
+    owasp_api: A03
+    effect_constructors: [external_call]
+    primitives: [oob_event]
+    norm_source: none
+    cwe: [CWE-611]
+    stride: [T]
+    sink_types: [xml_parser]
+    status: planned
+    requires_primitive: xml_entity_sink
+    note: external-call evidence alone classifies as SSRF; XXE needs parser-sink reachability
+
+  - class_id: open_redirect
+    title: Open Redirect
+    owasp_api: A01
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-601]
+    stride: [T]
+    status: planned
+    requires_primitive: redirect_field
+    note: marker must be bound to a redirect/Location field, not any response field
+
+  - class_id: deserialization
+    title: Insecure Deserialization
+    owasp_api: A08
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-502]
+    stride: [T]
+    sink_types: [deserializer]
+    status: active
+    note: marker reaches a deserializer sink
+
+  - class_id: nosql_injection
+    title: NoSQL Injection
+    owasp_api: A03
+    effect_constructors: [duration]
+    primitives: [latency_bound]
+    norm_source: none
+    cwe: [CWE-943]
+    stride: [T]
+    status: planned
+    requires_primitive: engine_oracle
+    note: latency is a lead; engine-specific query grammar is required
+
+  - class_id: ldap_injection
+    title: LDAP Injection
+    owasp_api: A03
+    effect_constructors: [duration]
+    primitives: [latency_bound]
+    norm_source: none
+    cwe: [CWE-90]
+    stride: [T]
+    status: planned
+    requires_primitive: grammar_oracle
+    note: latency is a lead; LDAP filter grammar is required
+
+  - class_id: xpath_injection
+    title: XPath Injection
+    owasp_api: A03
+    effect_constructors: [duration]
+    primitives: [latency_bound]
+    norm_source: none
+    cwe: [CWE-643]
+    stride: [T]
+    status: planned
+    requires_primitive: grammar_oracle
+    note: latency is a lead; XPath grammar is required
+
+  - class_id: prototype_pollution
+    title: Prototype Pollution
+    owasp_api: A03
+    effect_constructors: [changed, reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-1321]
+    stride: [T]
+    status: planned
+    requires_primitive: gadget_oracle
+    note: marker must prove key assignment and a downstream gadget
+
+  - class_id: stored_xss
+    title: Stored Cross-Site Scripting
+    owasp_api: A03
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-79]
+    stride: [T]
+    status: planned
+    requires_primitive: renderer
+    note: API can prove storage, not browser execution
+
+  - class_id: reflected_xss
+    title: Reflected Cross-Site Scripting
+    owasp_api: A03
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-79]
+    stride: [T]
+    status: planned
+    requires_primitive: renderer
+    note: response reflection is a lead until rendered
+
+  - class_id: path_traversal
+    title: Path Traversal
+    owasp_api: A01
+    effect_constructors: [reached]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-22]
+    stride: [E]
+    sink_types: [filesystem]
+    status: active
+    note: marker reaches a filesystem sink
+
+  - class_id: type_confusion
+    title: Type Confusion
+    owasp_api: A03
+    effect_constructors: [changed]
+    primitives: [differential]
+    norm_source: role_field_visibility
+    cwe: [CWE-843]
+    stride: [T]
+    input_roles: [type, type_confusion]
+    status: active
+    note: paired read-back proves a typed field changed to another type
+
+  - class_id: state_machine_violation
+    title: State Machine Violation
+    owasp_api: API6
+    effect_constructors: [transition]
+    primitives: [sequence]
+    norm_source: state_machine
+    cwe: [CWE-840]
+    stride: [T]
+    default_effects: [transition]
+    status: active
+    note: sequence evidence proves a forbidden state transition
+
+  - class_id: information_disclosure
+    title: Verbose Information Disclosure
+    owasp_api: API8
+    effect_constructors: [changed]
+    primitives: [marker]
+    norm_source: none
+    cwe: [CWE-200, CWE-209]
+    stride: [I]
+    status: planned
+    requires_primitive: error_diff
+    note: needs paired error and sanitized responses
