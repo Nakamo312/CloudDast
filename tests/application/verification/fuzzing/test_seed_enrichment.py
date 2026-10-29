@@ -19,9 +19,7 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.ports import ModelRequest, ModelResponse
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
-)
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast_fuzzing import FuzzSession
 from cloud_dast_fuzzing.corpus import PayloadCorpusStore
 from cloud_dast_fuzzing.corpus.enrichment import SeedEnrichmentConsultant

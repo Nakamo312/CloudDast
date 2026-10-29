@@ -54,6 +54,7 @@ from cloud_dast.runtime.campaign.graph import (
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
 from cloud_dast.runtime.metrics import CampaignMetrics
@@ -68,7 +69,6 @@ from cloud_dast.verification.oracles.grounded import (
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
-from cloud_dast.verification.promotion import PromotionPolicy
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_llm.axis_grounding import Dispatcher
 from cloud_dast_llm.consultation import ConsultationDispatcher

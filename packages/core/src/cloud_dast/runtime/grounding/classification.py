@@ -18,10 +18,9 @@ from cloud_dast.runtime.grounding.projection import (
     classification_action_id,
     classification_keys,
 )
-from cloud_dast.runtime.grounding.promotion import ProposalPromoter
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy, ProposalPromoter
 from cloud_dast.verification.promotion import (
     PROTECTED_CLASSIFICATION_ROLES,
-    PromotionPolicy,
 )
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.classification")

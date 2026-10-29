@@ -123,6 +123,7 @@ from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding import BatchFlow
 from cloud_dast.runtime.grounding.lifecycle import RunCoordinator
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.source import Loader
 from cloud_dast.runtime.grounding.variance import DifferentialFlow
 from cloud_dast.runtime.metrics import CampaignMetrics
@@ -142,9 +143,6 @@ from cloud_dast.verification.oracles import (
     SequenceOracle,
 )
 from cloud_dast.verification.projection import ObservationProjector
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
-)
 
 
 def select_stand_source(

@@ -11,9 +11,8 @@ from cloud_dast.composition.app_provider import open_formal_repository
 from cloud_dast.infrastructure.approval_audit import JsonlApprovalAuditLog
 from cloud_dast.infrastructure.neo4j.common.repository import make_session_factory
 from cloud_dast.runtime.grounding.classification import ApprovalFlow
-from cloud_dast.runtime.grounding.promotion import ProposalPromoter
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy, ProposalPromoter
 from cloud_dast.runtime.grounding.state import LeadLifecycle
-from cloud_dast.verification.promotion import PromotionPolicy
 
 
 def main(argv: Sequence[str] | None = None) -> int:

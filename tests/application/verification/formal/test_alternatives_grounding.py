@@ -13,9 +13,9 @@ from cloud_dast.ports import ModelRequest, ModelResponse
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, QdlGraph
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
-from cloud_dast.verification.promotion import PromotionPolicy
 from cloud_dast_llm.axis_grounding import Dispatcher
 from cloud_dast_llm.consultation import ConsultationDispatcher
 from tests.grounding_owner import commit_branch, make_grounding

@@ -30,9 +30,7 @@ from cloud_dast.qdl.graph import (
     input_field,
 )
 from cloud_dast.runtime.campaign.graph import Assembler
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
-)
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from tests.grounding_owner import make_grounding
 
 

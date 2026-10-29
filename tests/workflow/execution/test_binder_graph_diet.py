@@ -33,8 +33,8 @@ from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign.graph import (
     Assembler,
 )
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
-from cloud_dast.verification.promotion import PromotionPolicy
 
 
 class FormalRepository:

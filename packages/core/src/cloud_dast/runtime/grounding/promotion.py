@@ -8,13 +8,19 @@ and content-addressed persistence.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+import threading
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
+from cloud_dast.config import DEFAULT_MAX_PROMOTED_NORMS, MAX_SEMANTIC_FACTS
 from cloud_dast.consultation import current_consultation_telemetry
 from cloud_dast.ports import FormalRepository
 from cloud_dast.proposals import (
+    ClassificationPromotionContext,
+    PayloadCorpusPromotionResult,
     ProposalPromotionRequest,
+    ProposalPromotionResult,
 )
 from cloud_dast.qdl.graph import Context, QdlGraph, canonical_json
 from cloud_dast.qdl.graph_ops import append_supersession, merge_graphs
@@ -27,8 +33,20 @@ from cloud_dast.runtime.grounding.state import (
     is_original_parked_fact,
 )
 from cloud_dast.verification.evidence import EvidenceView
-from cloud_dast.verification.promotion import PromotionPolicy
+from cloud_dast.verification.promotion import (
+    park_proposal,
+    promote_payload_corpus_proposal,
+    promote_proposal,
+)
 from cloud_dast.verification.secret_shapes import secret_shape_graph
+
+if TYPE_CHECKING:
+    from cloud_dast.contracts.payload_proposals import (
+        PayloadCorpusDelta,
+        PayloadCorpusGuardrail,
+    )
+    from cloud_dast.contracts.payloads import PayloadCorpus
+
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.promotion")
 
@@ -73,6 +91,204 @@ def _as_proposal_graph(graph: QdlGraph) -> QdlGraph:
             for fact in graph.facts
         )
     )
+
+
+class PromotionPolicy:
+    """Apply one deterministic promotion boundary with campaign-wide caps.
+
+    The policy is deliberately mutable: startup, reactive, alternatives, and
+    variance batches share one budget.  A cap is therefore a campaign limit,
+    not a way for every model batch to receive its own allowance.
+    """
+
+    def __init__(
+        self,
+        *,
+        enabled: bool = False,
+        max_norms: int | None = DEFAULT_MAX_PROMOTED_NORMS,
+        max_semantic_facts: int = MAX_SEMANTIC_FACTS,
+        max_payload_delta_items: int | None = None,
+    ) -> None:
+        if max_norms is not None and max_norms <= 0:
+            raise ValueError("max_norms must be positive or None")
+        if max_semantic_facts <= 0:
+            raise ValueError("max_semantic_facts must be positive")
+        if max_payload_delta_items is None:
+            from cloud_dast.contracts.payload_proposals import (
+                MAX_PAYLOAD_CORPUS_DELTA_ITEMS,
+            )
+
+            max_payload_delta_items = MAX_PAYLOAD_CORPUS_DELTA_ITEMS
+        if max_payload_delta_items <= 0:
+            raise ValueError("max_payload_delta_items must be positive")
+        self._enabled = enabled
+        self._max_norms = max_norms
+        self._max_semantic_facts = max_semantic_facts
+        self._max_payload_delta_items = max_payload_delta_items
+        self._promoted_norms = 0
+        self._promoted_semantic_facts = 0
+        self._promoted_payload_delta_items = 0
+        self._lock = threading.Lock()
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @property
+    def max_norms(self) -> int | None:
+        return self._max_norms
+
+    @property
+    def max_semantic_facts(self) -> int:
+        return self._max_semantic_facts
+
+    @property
+    def promoted_norms(self) -> int:
+        return self._promoted_norms
+
+    @property
+    def promoted_semantic_facts(self) -> int:
+        return self._promoted_semantic_facts
+
+    @property
+    def max_payload_delta_items(self) -> int:
+        return self._max_payload_delta_items
+
+    @property
+    def promoted_payload_delta_items(self) -> int:
+        return self._promoted_payload_delta_items
+
+    @property
+    def exhausted(self) -> bool:
+        return (
+            self._max_norms is not None and self._promoted_norms >= self._max_norms
+        ) or self._promoted_semantic_facts >= self._max_semantic_facts
+
+    @property
+    def payload_budget_exhausted(self) -> bool:
+        return self._promoted_payload_delta_items >= self._max_payload_delta_items
+
+    def promote(self, request: ProposalPromotionRequest) -> ProposalPromotionResult:
+        """Promote one request and consume the shared campaign budget."""
+
+        with self._lock:
+            if not self._enabled:
+                return park_proposal(
+                    request.source,
+                    request.proposal,
+                    evidence_fields=request.evidence_fields,
+                )
+            remaining_norms = (
+                None
+                if self._max_norms is None
+                else self._max_norms - self._promoted_norms
+            )
+            remaining_semantic_facts = (
+                self._max_semantic_facts - self._promoted_semantic_facts
+            )
+            if remaining_norms == 0 or remaining_semantic_facts == 0:
+                return park_proposal(
+                    request.source,
+                    request.proposal,
+                    evidence_fields=request.evidence_fields,
+                )
+
+            result = promote_proposal(
+                request.source,
+                request.proposal,
+                max_norms=remaining_norms,
+                max_semantic_facts=remaining_semantic_facts,
+                duration_thresholds=request.duration_thresholds,
+                evidence_fields=request.evidence_fields,
+                evidence_refs=request.evidence_refs,
+                action_ids=frozenset(request.action_ids),
+                approved_classifications=request.approved_classifications,
+                runtime_evidence_exempt_predicates=(
+                    request.runtime_evidence_exempt_predicates
+                ),
+                classification_context=request.classification_context,
+            )
+            self._promoted_norms += len(result.promoted_norms)
+            self._promoted_semantic_facts += result.promoted_semantic_facts
+            return result
+
+    def promote_intersected_proposals(
+        self,
+        source: QdlGraph,
+        proposals: Iterable[QdlGraph],
+        *,
+        action_ids: frozenset[str] | tuple[str, ...] = (),
+        duration_thresholds: Mapping[str, int] | None = None,
+        evidence_fields: frozenset[str] | None = None,
+        evidence_refs: frozenset[str] = frozenset(),
+        approved_classifications: frozenset[str] = frozenset(),
+        runtime_evidence_exempt_predicates: frozenset[str] = frozenset(),
+        classification_context: ClassificationPromotionContext | None = None,
+    ) -> ProposalPromotionResult:
+        """Intersect independent proposals, then apply the promotion boundary.
+
+        The intersection is the only proposal that can reach this method's
+        accepted graph.  A single proposal is valid input: S34R is an exact
+        intersection, not a count threshold.  Existing source, evidence, and
+        operator gates still run after the intersection.
+        """
+
+        from cloud_dast.consultation import (
+            intersect_grounded_proposals,
+        )
+
+        proposal = intersect_grounded_proposals(proposals)
+        return self.promote(
+            ProposalPromotionRequest(
+                source=source,
+                proposal=proposal,
+                action_ids=action_ids,
+                duration_thresholds=duration_thresholds,
+                evidence_fields=evidence_fields,
+                evidence_refs=evidence_refs,
+                approved_classifications=approved_classifications,
+                runtime_evidence_exempt_predicates=(runtime_evidence_exempt_predicates),
+                classification_context=classification_context,
+            )
+        )
+
+    def promote_payload_corpus(
+        self,
+        source: QdlGraph,
+        proposal: PayloadCorpusDelta,
+        *,
+        action_id: str,
+        base_corpus: PayloadCorpus,
+        guardrail: PayloadCorpusGuardrail | None = None,
+    ) -> PayloadCorpusPromotionResult:
+        """Promote one payload-data delta under the same explicit policy."""
+
+        with self._lock:
+            if not self._enabled:
+                return PayloadCorpusPromotionResult(
+                    "parked",
+                    proposal,
+                    reasons=("payload corpus promotion is disabled",),
+                )
+            remaining = self._max_payload_delta_items - (
+                self._promoted_payload_delta_items
+            )
+            if remaining <= 0:
+                return PayloadCorpusPromotionResult(
+                    "parked",
+                    proposal,
+                    reasons=("payload corpus promotion budget is exhausted",),
+                )
+            result = promote_payload_corpus_proposal(
+                source,
+                proposal,
+                action_id=action_id,
+                base_corpus=base_corpus,
+                guardrail=guardrail,
+                max_items=remaining,
+            )
+            self._promoted_payload_delta_items += result.promoted_items
+            return result
 
 
 class ProposalPromoter:

@@ -12,9 +12,9 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.qdl.semantic_norm_compiler import (
     SemanticNormCompiler,
 )
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.planning import QdlPlanner
 from cloud_dast.verification.promotion import (
-    PromotionPolicy,
     ProposalPromotionRequest,
     promote_proposal,
 )

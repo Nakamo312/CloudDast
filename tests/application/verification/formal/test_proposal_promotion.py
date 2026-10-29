@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from time import sleep
+
 import pytest
 
 from cloud_dast.qdl.graph import (
@@ -26,10 +30,10 @@ from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.qdl.semantic_norm_compiler import (
     sensitive_exposure_effects,
 )
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.planning import QdlPlanner
 from cloud_dast.verification.promotion import (
     ClassificationPromotionContext,
-    PromotionPolicy,
     ProposalPromotionRequest,
     promote_payload_corpus_proposal,
     promote_proposal,
@@ -63,6 +67,67 @@ def _source() -> QdlGraph:
             _fact("is", (resource, Atom(value="Resource")), Context.CONTRACT),
         )
     )
+
+
+def test_campaign_cap_is_atomic(monkeypatch) -> None:
+    import importlib
+
+    owner = importlib.import_module(PromotionPolicy.__module__)
+    original = owner.promote_proposal
+    start = Barrier(8)
+
+    def delayed(*args, **kwargs):
+        sleep(0.01)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(owner, "promote_proposal", delayed)
+    policy = PromotionPolicy(enabled=True, max_norms=1)
+
+    def promote(index):
+        start.wait(timeout=5)
+        return policy.promote(
+            ProposalPromotionRequest(
+                source=_source(),
+                proposal=_proposal(
+                    (
+                        Atom(value=f"norm:concurrent-{index}"),
+                        allowed(Atom(value="action:get-secret")),
+                    )
+                ),
+            )
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(promote, range(8)))
+
+    assert sum(len(result.promoted_norms) for result in results) == 1
+    assert policy.promoted_norms == 1
+    assert policy.exhausted
+    assert sum(result.parked_semantics is not None for result in results) == 7
+
+
+def test_failed_admission_does_not_spend_campaign_cap(monkeypatch) -> None:
+    import importlib
+
+    owner = importlib.import_module(PromotionPolicy.__module__)
+    policy = PromotionPolicy(enabled=True, max_norms=1)
+    request = ProposalPromotionRequest(
+        source=_source(),
+        proposal=_proposal(
+            (Atom(value="norm:retry"), allowed(Atom(value="action:get-secret")))
+        ),
+    )
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("admission interrupted")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(owner, "promote_proposal", fail)
+        with pytest.raises(RuntimeError, match="admission interrupted"):
+            policy.promote(request)
+
+    assert policy.promoted_norms == policy.promoted_semantic_facts == 0
+    assert policy.promote(request).promoted_norms == ("norm:retry",)
 
 
 def _proposal(*effects: tuple[Atom, object]) -> QdlGraph:

@@ -14,9 +14,7 @@ from cloud_dast.proposals import (
 from cloud_dast.qdl.graph import QdlGraph
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.qdl.projection import planner_view
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
-)
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 
 logger = logging.getLogger("cloud_dast.formal.campaign_graphs")
 

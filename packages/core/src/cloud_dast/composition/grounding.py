@@ -16,12 +16,11 @@ from cloud_dast.runtime.grounding.config import ReactiveGrounding, StartupGround
 from cloud_dast.runtime.grounding.consultation import DispatchFlow
 from cloud_dast.runtime.grounding.evidence import MeasuredEvidencePolicy
 from cloud_dast.runtime.grounding.lifecycle import RunCoordinator, RunOptions
-from cloud_dast.runtime.grounding.promotion import ProposalPromoter
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy, ProposalPromoter
 from cloud_dast.runtime.grounding.runtime import BatchFlow
 from cloud_dast.runtime.grounding.source import Loader
 from cloud_dast.runtime.grounding.state import ConsultationLedger, LeadLifecycle
 from cloud_dast.runtime.grounding.variance import DifferentialFlow
-from cloud_dast.verification.promotion import PromotionPolicy
 
 
 @dataclass(frozen=True, slots=True)

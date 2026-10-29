@@ -9,8 +9,8 @@ from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, QdlGraph, Struc
 from cloud_dast.qdl.state_machine import (
     state_machine_graph,
 )
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.verification.promotion import (
-    PromotionPolicy,
     ProposalPromotionRequest,
 )
 from cloud_dast_automata.learning import AALpyAutomataLearningAdapter

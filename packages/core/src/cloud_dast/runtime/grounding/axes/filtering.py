@@ -10,7 +10,7 @@ deterministic projection seam.
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import replace
 
 from cloud_dast.consultation import (
@@ -32,6 +32,7 @@ from cloud_dast.verification.evidence import (
     EvidenceView,
     evidence_response_fields,
 )
+from cloud_dast.verification.promotion import field_is_bound
 
 _RESPONSE_SEMANTICS_PREDICATES = frozenset({"is", "exposes", "has"})
 _AXIS_PREDICATES: dict[str, frozenset[str]] = {
@@ -332,7 +333,7 @@ def _response_fact_is_grounded(
     """Require response facts to be action-, owner-, and evidence-bound."""
 
     if fact.predicate.name == "has" and len(fact.args) == 2:
-        return _field_is_bound(
+        return field_is_bound(
             fact.args[0], "output_field", allowed_actions, evidence_fields
         )
     if fact.predicate.name == "exposes" and len(fact.args) == 2:
@@ -340,7 +341,7 @@ def _response_fact_is_grounded(
         return (
             action in allowed_actions
             and action in target_resources
-            and _field_is_bound(
+            and field_is_bound(
                 fact.args[1], "field", target_resources[action], evidence_fields
             )
         )
@@ -356,25 +357,8 @@ def _response_fact_is_grounded(
                     for resource in resources
                 }
             )
-            return _field_is_bound(entity, entity.name, owners, evidence_fields)
+            return field_is_bound(entity, entity.name, owners, evidence_fields)
     return True
-
-
-def _field_is_bound(
-    entity: object,
-    kind: str,
-    owners: Collection[str | None],
-    evidence_fields: set[str],
-) -> bool:
-    """Check a field's shape, owner, and observed name as one binding."""
-
-    return (
-        isinstance(entity, Struct)
-        and entity.name == kind
-        and len(entity.args) == 2
-        and atom_value(entity.args[0]) in owners
-        and atom_value(entity.args[1]) in evidence_fields
-    )
 
 
 def _allowed_actions(action_slice: QdlGraph, action_ids: tuple[str, ...]) -> set[str]:

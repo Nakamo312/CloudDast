@@ -21,9 +21,9 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
-from cloud_dast.verification.promotion import PromotionPolicy
 from tests.grounding_owner import make_grounding
 
 

@@ -86,6 +86,7 @@ from cloud_dast.runtime.evidence_gate import Gate
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.runtime.grounding.startup import Bootstrap
@@ -98,9 +99,6 @@ from cloud_dast.verification.oracles import (
     GroundedOutcomeOracle,
     OobOracle,
     PrimitiveOracleRouter,
-)
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
 )
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,

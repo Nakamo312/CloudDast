@@ -33,6 +33,7 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.grounding import runtime as grounding_runtime
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
@@ -42,10 +43,60 @@ from cloud_dast.verification.evidence import (
     evidence_response_fields,
 )
 from cloud_dast.verification.promotion import (
-    PromotionPolicy,
+    _filter_response_semantics,
 )
 from cloud_dast.verification.slices import SiblingAction, SiblingActionSlice
 from tests.grounding_owner import commit_reactive, make_grounding
+
+
+@pytest.mark.parametrize(
+    ("kind", "evidence_fields", "allowed_actions", "accepted"),
+    [
+        pytest.param(
+            "output_field", {"email"}, {"action:get"}, True, id="observed-output"
+        ),
+        pytest.param("field", {"email"}, {"action:get"}, False, id="wrong-kind"),
+        pytest.param("output_field", set(), {"action:get"}, False, id="no-evidence"),
+        pytest.param(
+            "output_field", {"other"}, {"action:get"}, False, id="unobserved-name"
+        ),
+        pytest.param(
+            "output_field", {"email"}, {"action:other"}, False, id="wrong-action"
+        ),
+    ],
+)
+def test_response_output_role_fallback(
+    kind, evidence_fields, allowed_actions, accepted
+) -> None:
+    action = Atom(value="action:get")
+    holder = Struct(name=kind, args=(action, Atom(value="email")))
+    declaration = _fact("is", (holder, Atom(value="Field")), Context.ACCEPTED)
+    role = _fact("has", (holder, Atom(value="object_ref")), Context.ACCEPTED)
+    source = QdlGraph(facts=(_fact("is", (action, Atom(value="Action"))),))
+    graph = QdlGraph(facts=(*source.facts, declaration, role))
+
+    filtered, issues = _filter_response_semantics(
+        graph,
+        source,
+        allowed_actions=frozenset(allowed_actions),
+        evidence_fields=frozenset(evidence_fields),
+    )
+
+    assert (role in filtered.facts) is accepted
+    role_issues = [
+        issue for issue in issues if issue.path == f"facts[{canonical_json(role)}]"
+    ]
+    if accepted:
+        assert declaration in filtered.facts
+        assert not issues
+    else:
+        assert len(role_issues) == 1
+        assert role_issues[0].code == "response_grounding"
+        assert role_issues[0].message == (
+            "field role is not exposed by the source or live evidence"
+            if kind == "field"
+            else "output-field role is not source-owned or evidence-grounded"
+        )
 
 
 class _Repository:

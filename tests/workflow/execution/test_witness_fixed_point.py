@@ -41,12 +41,12 @@ from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.finding_evaluator import FindingEvaluator
-from cloud_dast.verification.promotion import PromotionPolicy
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,

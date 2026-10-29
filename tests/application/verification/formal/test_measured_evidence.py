@@ -17,9 +17,9 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.grounding import MeasuredEvidencePolicy
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.differential.report import DiffReport
-from cloud_dast.verification.promotion import PromotionPolicy
 from tests.grounding_owner import commit_variance, make_grounding
 
 

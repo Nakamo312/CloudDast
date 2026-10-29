@@ -38,13 +38,11 @@ from cloud_dast.runtime.deficits.work_items import (
 from cloud_dast.runtime.differential.results import VarianceRecord
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.inputs import PairInput
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.differential.report import DiffReport
 from cloud_dast.verification.evidence import (
     build_paired_evidence_view,
-)
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
 )
 from cloud_dast.verification.slices import build_sibling_action_slice
 from tests.grounding_owner import make_grounding

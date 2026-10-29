@@ -68,6 +68,7 @@ from cloud_dast.runtime.deficits import (
 from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding.config import GrounderOptions
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
@@ -80,7 +81,6 @@ from cloud_dast.verification.oracles.grounded import (
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
-from cloud_dast.verification.promotion import PromotionPolicy
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,

@@ -50,6 +50,7 @@ from cloud_dast.runtime.execution.view import (
 from cloud_dast.runtime.execution.view import (
     ordered_plan_actions as _ordered_plan_actions,
 )
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.planning import QdlPlanner, declared_action_ids
 from cloud_dast.runtime.reference_projection import (
     refers_to_targets_by_action as _refers_to_targets_by_action,
@@ -60,9 +61,6 @@ from cloud_dast.runtime.resource_projection import (
 from cloud_dast.verification.action_runtime import build_action_runtime_ledger
 from cloud_dast.verification.invariant_projection import (
     resolve_actions,
-)
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
 )
 
 

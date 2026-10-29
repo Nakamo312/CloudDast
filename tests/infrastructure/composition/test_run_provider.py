@@ -53,11 +53,9 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign import BoundPathRunner
+from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
-from cloud_dast.verification.promotion import (
-    PromotionPolicy,
-)
 from cloud_dast_fuzzing import FuzzSession
 from cloud_dast_llm.threat_model import FormalThreatModeler
 from cloud_dast_symbolic.solver import Z3SymbolicGenerator

@@ -5,8 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import threading
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import TYPE_CHECKING
 
 from cloud_dast.config import DEFAULT_MAX_PROMOTED_NORMS, MAX_SEMANTIC_FACTS
@@ -251,17 +250,21 @@ def _is_output_field_fact(fact: Fact) -> bool:
     return isinstance(holder, Struct) and holder.name == "output_field"
 
 
-def _output_field_is_evidence_grounded(
-    fact: Fact,
-    allowed_actions: frozenset[str],
-    evidence_fields: frozenset[str],
+def field_is_bound(
+    entity: object,
+    kind: str,
+    owners: Collection[str | None],
+    evidence_fields: Collection[str],
 ) -> bool:
-    holder = fact.args[0]
-    if not isinstance(holder, Struct) or len(holder.args) != 2:
-        return False
-    action = atom_value(holder.args[0])
-    field_name = atom_value(holder.args[1])
-    return action in allowed_actions and field_name in evidence_fields
+    """Check a field's shape, owner, and observed name as one binding."""
+
+    return (
+        isinstance(entity, Struct)
+        and entity.name == kind
+        and len(entity.args) == 2
+        and atom_value(entity.args[0]) in owners
+        and atom_value(entity.args[1]) in evidence_fields
+    )
 
 
 def _source_exposed_witnesses(graph: QdlGraph) -> set[str]:
@@ -325,7 +328,9 @@ def _filter_response_semantics(
 ) -> tuple[QdlGraph, tuple[ValidationIssue, ...]]:
     """Apply the response/evidence boundary to one accepted semantic graph."""
 
-    source_actions = _actions(source)
+    source_actions = source.declared_identifiers(
+        "Action", contexts=_EXECUTABLE_CONTEXTS
+    )
     source_targets = _target_resources(source)
     source_witnesses = _source_declared_witnesses(source)
     source_output_fields = _source_output_fields(source)
@@ -391,7 +396,7 @@ def _filter_response_semantics(
                 atom_value(fact.args[0].args[1]),
             )
             in source_output_fields
-            or _output_field_is_evidence_grounded(fact, actions, evidence)
+            or field_is_bound(fact.args[0], "output_field", actions, evidence)
         ),
         "output-field role is not source-owned or evidence-grounded",
     )
@@ -490,236 +495,38 @@ def _fact_logical_key(fact: Fact) -> str:
     return canonical_json(fact.model_copy(update={"context": Context.PROPOSAL}))
 
 
-class PromotionPolicy:
-    """Apply one deterministic promotion boundary with campaign-wide caps.
-
-    The policy is deliberately mutable: startup, reactive, alternatives, and
-    variance batches share one budget.  A cap is therefore a campaign limit,
-    not a way for every model batch to receive its own allowance.
-    """
-
-    def __init__(
-        self,
-        *,
-        enabled: bool = False,
-        max_norms: int | None = DEFAULT_MAX_PROMOTED_NORMS,
-        max_semantic_facts: int = MAX_SEMANTIC_FACTS,
-        max_payload_delta_items: int | None = None,
-    ) -> None:
-        if max_norms is not None and max_norms <= 0:
-            raise ValueError("max_norms must be positive or None")
-        if max_semantic_facts <= 0:
-            raise ValueError("max_semantic_facts must be positive")
-        if max_payload_delta_items is None:
-            from cloud_dast.contracts.payload_proposals import (
-                MAX_PAYLOAD_CORPUS_DELTA_ITEMS,
-            )
-
-            max_payload_delta_items = MAX_PAYLOAD_CORPUS_DELTA_ITEMS
-        if max_payload_delta_items <= 0:
-            raise ValueError("max_payload_delta_items must be positive")
-        self._enabled = enabled
-        self._max_norms = max_norms
-        self._max_semantic_facts = max_semantic_facts
-        self._max_payload_delta_items = max_payload_delta_items
-        self._promoted_norms = 0
-        self._promoted_semantic_facts = 0
-        self._promoted_payload_delta_items = 0
-        self._lock = threading.Lock()
-
-    @property
-    def enabled(self) -> bool:
-        return self._enabled
-
-    @property
-    def max_norms(self) -> int | None:
-        return self._max_norms
-
-    @property
-    def max_semantic_facts(self) -> int:
-        return self._max_semantic_facts
-
-    @property
-    def promoted_norms(self) -> int:
-        return self._promoted_norms
-
-    @property
-    def promoted_semantic_facts(self) -> int:
-        return self._promoted_semantic_facts
-
-    @property
-    def max_payload_delta_items(self) -> int:
-        return self._max_payload_delta_items
-
-    @property
-    def promoted_payload_delta_items(self) -> int:
-        return self._promoted_payload_delta_items
-
-    @property
-    def exhausted(self) -> bool:
-        return (
-            self._max_norms is not None and self._promoted_norms >= self._max_norms
-        ) or self._promoted_semantic_facts >= self._max_semantic_facts
-
-    @property
-    def payload_budget_exhausted(self) -> bool:
-        return self._promoted_payload_delta_items >= self._max_payload_delta_items
-
-    def promote(self, request: ProposalPromotionRequest) -> ProposalPromotionResult:
-        """Promote one request and consume the shared campaign budget."""
-
-        with self._lock:
-            if not self._enabled:
-                return self._parked_result(
-                    request.source,
-                    request.proposal,
-                    evidence_fields=request.evidence_fields,
-                )
-            remaining_norms = (
-                None
-                if self._max_norms is None
-                else self._max_norms - self._promoted_norms
-            )
-            remaining_semantic_facts = (
-                self._max_semantic_facts - self._promoted_semantic_facts
-            )
-            if remaining_norms == 0 or remaining_semantic_facts == 0:
-                return self._parked_result(
-                    request.source,
-                    request.proposal,
-                    evidence_fields=request.evidence_fields,
-                )
-
-            result = promote_proposal(
-                request.source,
-                request.proposal,
-                max_norms=remaining_norms,
-                max_semantic_facts=remaining_semantic_facts,
-                duration_thresholds=request.duration_thresholds,
-                evidence_fields=request.evidence_fields,
-                evidence_refs=request.evidence_refs,
-                action_ids=frozenset(request.action_ids),
-                approved_classifications=request.approved_classifications,
-                runtime_evidence_exempt_predicates=(
-                    request.runtime_evidence_exempt_predicates
-                ),
-                classification_context=request.classification_context,
-            )
-            self._promoted_norms += len(result.promoted_norms)
-            self._promoted_semantic_facts += result.promoted_semantic_facts
-            return result
-
-    def promote_intersected_proposals(
-        self,
-        source: QdlGraph,
-        proposals: Iterable[QdlGraph],
-        *,
-        action_ids: frozenset[str] | tuple[str, ...] = (),
-        duration_thresholds: Mapping[str, int] | None = None,
-        evidence_fields: frozenset[str] | None = None,
-        evidence_refs: frozenset[str] = frozenset(),
-        approved_classifications: frozenset[str] = frozenset(),
-        runtime_evidence_exempt_predicates: frozenset[str] = frozenset(),
-        classification_context: ClassificationPromotionContext | None = None,
-    ) -> ProposalPromotionResult:
-        """Intersect independent proposals, then apply the promotion boundary.
-
-        The intersection is the only proposal that can reach this method's
-        accepted graph.  A single proposal is valid input: S34R is an exact
-        intersection, not a count threshold.  Existing source, evidence, and
-        operator gates still run after the intersection.
-        """
-
-        from cloud_dast.consultation import (
-            intersect_grounded_proposals,
+def park_proposal(
+    source: QdlGraph,
+    proposal: QdlGraph,
+    *,
+    evidence_fields: frozenset[str] | None = None,
+) -> ProposalPromotionResult:
+    facts = tuple(
+        fact.model_copy(update={"context": Context.PROPOSAL})
+        for fact in proposal.facts
+        if fact.context is Context.PROPOSAL
+    )
+    try:
+        parked = (
+            QdlGraph(facts=facts, rules=proposal.rules)
+            if facts or proposal.rules
+            else None
         )
-
-        proposal = intersect_grounded_proposals(proposals)
-        return self.promote(
-            ProposalPromotionRequest(
-                source=source,
-                proposal=proposal,
-                action_ids=action_ids,
-                duration_thresholds=duration_thresholds,
-                evidence_fields=evidence_fields,
-                evidence_refs=evidence_refs,
-                approved_classifications=approved_classifications,
-                runtime_evidence_exempt_predicates=(runtime_evidence_exempt_predicates),
-                classification_context=classification_context,
-            )
-        )
-
-    def promote_payload_corpus(
-        self,
-        source: QdlGraph,
-        proposal: PayloadCorpusDelta,
-        *,
-        action_id: str,
-        base_corpus: PayloadCorpus,
-        guardrail: PayloadCorpusGuardrail | None = None,
-    ) -> PayloadCorpusPromotionResult:
-        """Promote one payload-data delta under the same explicit policy."""
-
-        with self._lock:
-            if not self._enabled:
-                return PayloadCorpusPromotionResult(
-                    "parked",
-                    proposal,
-                    reasons=("payload corpus promotion is disabled",),
-                )
-            remaining = self._max_payload_delta_items - (
-                self._promoted_payload_delta_items
-            )
-            if remaining <= 0:
-                return PayloadCorpusPromotionResult(
-                    "parked",
-                    proposal,
-                    reasons=("payload corpus promotion budget is exhausted",),
-                )
-            result = promote_payload_corpus_proposal(
-                source,
-                proposal,
-                action_id=action_id,
-                base_corpus=base_corpus,
-                guardrail=guardrail,
-                max_items=remaining,
-            )
-            self._promoted_payload_delta_items += result.promoted_items
-            return result
-
-    @staticmethod
-    def _parked_result(
-        source: QdlGraph,
-        proposal: QdlGraph,
-        *,
-        evidence_fields: frozenset[str] | None = None,
-    ) -> ProposalPromotionResult:
-        facts = tuple(
-            fact.model_copy(update={"context": Context.PROPOSAL})
-            for fact in proposal.facts
-            if fact.context is Context.PROPOSAL
-        )
-        try:
-            parked = (
-                QdlGraph(facts=facts, rules=proposal.rules)
-                if facts or proposal.rules
-                else None
-            )
-        except ValueError:
-            parked = None
-        unproven = _unproven_classifications(source, proposal, evidence_fields)
-        declarations = _declarations(source, proposal, include_untrusted=True)
-        return ProposalPromotionResult(
-            graph=QdlGraph(),
-            promoted_norms=(),
-            rejected_norms=(),
-            parked_classifications=_parked_classifications_graph(
-                unproven,
-                declarations,
-                _lead_norm_bundles(source, proposal, unproven, declarations),
-            ),
-            parked_semantics=parked,
-        )
+    except ValueError:
+        parked = None
+    unproven = _unproven_classifications(source, proposal, evidence_fields)
+    declarations = _declarations(source, proposal, include_untrusted=True)
+    return ProposalPromotionResult(
+        graph=QdlGraph(),
+        promoted_norms=(),
+        rejected_norms=(),
+        parked_classifications=_parked_classifications_graph(
+            unproven,
+            declarations,
+            _lead_norm_bundles(source, proposal, unproven, declarations),
+        ),
+        parked_semantics=parked,
+    )
 
 
 def promote_proposal(
@@ -786,7 +593,9 @@ def promote_proposal(
 
     declarations = _declarations(source, proposal)
     review_declarations = _declarations(source, proposal, include_untrusted=True)
-    source_actions = _actions(source)
+    source_actions = source.declared_identifiers(
+        "Action", contexts=_EXECUTABLE_CONTEXTS
+    )
     allowed_actions = _requested_actions(action_ids)
     if allowed_actions is not None:
         source_actions &= allowed_actions
@@ -1625,21 +1434,14 @@ def _supported_semantic_effects(
     """Return directly proposed effects backed by merged graph semantics."""
 
     declarations = _declarations(source, proposal)
-    facts: list[Fact] = []
-    seen: set[str] = set()
+    graphs = []
     for fact in _supported_facts(source, proposal, evidence_fields):
         graph = _self_contained_graph(fact, declarations=declarations)
-        if graph is None:
-            continue
-        for supported_fact in graph.facts:
-            key = canonical_json(supported_fact)
-            if key in seen:
-                continue
-            seen.add(key)
-            facts.append(supported_fact)
-    if not facts:
+        if graph is not None:
+            graphs.append(graph)
+    if not graphs:
         return frozenset()
-    graph = QdlGraph(facts=tuple(facts))
+    graph = merge_graphs(*graphs)
     _duration_effects, reached_effects, sensitive_exposure_effects = _semantic_effects()
     effects = (*sensitive_exposure_effects(graph), *reached_effects(graph))
     return frozenset(canonical_json(effect) for effect in effects)
@@ -1712,7 +1514,7 @@ def _classification_fact_is_anchored(
                 or f"action:{action_id}" in source_actions
                 or action_id.removeprefix("action:") in source_actions
             )
-        return _declared_type_in(source, subject)
+        return bool(_declared_types(source, subject))
     return value_name in values
 
 
@@ -1737,37 +1539,6 @@ def _classification_fact_is_trusted(
         fact,
         evidence_fields,
         approved_classifications,
-    )
-
-
-def _declared_type_in(source: QdlGraph, term: object) -> bool:
-    """Return whether the source graph declares one term with any type."""
-
-    term_key = canonical_json(term)
-    return any(
-        fact.context in _EXECUTABLE_CONTEXTS
-        and fact.predicate.name == "is"
-        and len(fact.args) == 2
-        and canonical_json(fact.args[0]) == term_key
-        for fact in source.facts
-    )
-
-
-def _source_declares_value(
-    source: QdlGraph,
-    term: object,
-    value_name: str,
-) -> bool:
-    """Return whether the source already declares this exact term type."""
-
-    term_key = canonical_json(term)
-    return any(
-        fact.context in _EXECUTABLE_CONTEXTS
-        and fact.predicate.name == "is"
-        and len(fact.args) == 2
-        and canonical_json(fact.args[0]) == term_key
-        and atom_value(fact.args[1]) == value_name
-        for fact in source.facts
     )
 
 
@@ -1961,7 +1732,8 @@ def _proposal_fact_is_supported(
         action = _field_action(fact.args[0])
         return (
             action is not None
-            and action in _actions(source)
+            and action
+            in source.declared_identifiers("Action", contexts=_EXECUTABLE_CONTEXTS)
             and _source_declares_field(source, fact.args[0])
             and bool(_declared_types(source, fact.args[1]) & _REACH_SINK_TYPES)
         )
@@ -2193,18 +1965,6 @@ def _declarations(
     return result
 
 
-def _actions(graph: QdlGraph) -> frozenset[str]:
-    return frozenset(
-        atom_value(fact.args[0])
-        for fact in graph.facts
-        if fact.context in _EXECUTABLE_CONTEXTS
-        if fact.predicate.name == "is"
-        and len(fact.args) == 2
-        and atom_value(fact.args[1]) == "Action"
-        and atom_value(fact.args[0]) is not None
-    )
-
-
 def _self_contained_graph(
     fact: Fact,
     *,
@@ -2244,10 +2004,11 @@ def _declarations_for_term(term: object, declarations: dict[str, Fact]):
 __all__ = [
     "LeadDescriptor",
     "PayloadCorpusPromotionResult",
-    "PromotionPolicy",
     "ProposalPromotionRequest",
     "ProposalPromotionResult",
     "lead_descriptor",
     "promote_payload_corpus_proposal",
     "promote_proposal",
+    "park_proposal",
+    "field_is_bound",
 ]
