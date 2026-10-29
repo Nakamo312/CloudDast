@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloud-dast-symbolic"
+version = "0.1.0"
+description = "Z3 symbolic extension for Cloud DAST"
+requires-python = "~=3.12.0"
+dependencies = [
+    "cloud-dast-core==0.1.0",
+    "z3-solver>=4.13",
+]
+
+[project.entry-points."cloud_dast.extensions"]
+symbolic = "cloud_dast_symbolic.plugin:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloud_dast_symbolic"]
+
+[tool.uv.sources]
+cloud-dast-core = { path = "../core" }

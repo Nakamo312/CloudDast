@@ -1,0 +1,19 @@
+schema_version: 1
+sink_roles:
+  command: witness
+  command_shell: witness
+  external_net: witness
+  filesystem: witness
+  interpreter: witness
+  sql: witness
+  template_engine: witness
+  xml_parser: witness
+  renderer: candidate
+error_witness_sink_types:
+  - command_shell
+  - external_net
+  - filesystem
+  - interpreter
+  - xml_parser
+resource_not_found_witness_sink_types:
+  - filesystem

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloud-dast-llm"
+version = "0.1.0"
+description = "LLM proposal schemas and extensions for Cloud DAST"
+requires-python = "~=3.12.0"
+dependencies = [
+    "cloud-dast-core==0.1.0",
+    "pydantic>=2.13.5",
+]
+
+[project.entry-points."cloud_dast.extensions"]
+llm = "cloud_dast_llm.plugin:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloud_dast_llm"]
+
+[tool.uv.sources]
+cloud-dast-core = { path = "../core" }

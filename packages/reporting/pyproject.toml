@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloud-dast-reporting"
+version = "0.1.0"
+description = "Cloud DAST reporting read models and render-ready events"
+requires-python = "~=3.12.0"
+dependencies = [
+    "cloud-dast-core==0.1.0",
+    "pydantic>=2.13.5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloud_dast_reporting"]
+
+[tool.uv.sources]
+cloud-dast-core = { path = "../core" }
