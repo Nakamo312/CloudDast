@@ -1,0 +1,164 @@
+schema_version: 2
+corpus_version: "2"
+productions:
+  - production_id: command-posix
+    sink_types: [command, command_shell]
+    dialects: [posix, shell, unix]
+    default: true
+    template: "{metachar}{witness}"
+    slots:
+      - name: metachar
+        alternatives: ["; ", "&& ", "|| ", "| ", "`", "$("]
+      - name: witness
+        alternatives: ["printf {marker}", "echo {marker}", "true", "false"]
+
+  - production_id: command-windows
+    sink_types: [command, command_shell]
+    dialects: [windows, cmd]
+    template: "{metachar}{witness}"
+    slots:
+      - name: metachar
+        alternatives: ["& ", "&& ", "|| ", "| "]
+      - name: witness
+        alternatives: ["echo {marker}", "true", "false"]
+
+  - production_id: sql-ansi
+    sink_types: [interpreter, sql]
+    dialects: [ansi, single, postgres, postgresql]
+    default: true
+    template: "{quote}{witness}{quote}{terminator}"
+    slots:
+      - name: quote
+        alternatives: ["'"]
+      - name: witness
+        alternatives: ["{marker}", " OR 1=1", " OR 1=2", " OR 'a'='a'"]
+      - name: terminator
+        alternatives: ["--", ";", ""]
+
+  - production_id: sql-backtick
+    sink_types: [interpreter, sql]
+    dialects: [backtick, mysql, mariadb]
+    template: "{quote}{witness}{quote}{terminator}"
+    slots:
+      - name: quote
+        alternatives: ["`"]
+      - name: witness
+        alternatives: ["{marker}", " OR 1=1", " OR 1=2"]
+      - name: terminator
+        alternatives: ["--", "#", ";", ""]
+
+  - production_id: sql-double
+    sink_types: [interpreter, sql]
+    dialects: [double]
+    template: "{quote}{witness}{quote}{terminator}"
+    slots:
+      - name: quote
+        alternatives: ['"']
+      - name: witness
+        alternatives: ["{marker}", " OR 1=1", " OR 1=2"]
+      - name: terminator
+        alternatives: ["--", ";", ""]
+
+  - production_id: sql-unquoted
+    sink_types: [interpreter, sql]
+    dialects: [none]
+    template: "{quote}{witness}{terminator}"
+    slots:
+      - name: quote
+        alternatives: [""]
+      - name: witness
+        alternatives: ["{marker}", " OR 1=1", " OR 1=2"]
+      - name: terminator
+        alternatives: [";", ""]
+
+  - production_id: traversal-generic
+    sink_types: [filesystem, path]
+    dialects: [generic]
+    default: true
+    template: "{prefix}{separator}{escape}{witness}"
+    slots:
+      - name: prefix
+        alternatives: [".pdf", "document.pdf", "report.pdf"]
+      - name: separator
+        alternatives: ["/", "\\"]
+      - name: escape
+        alternatives: ["../", "..\\", "..%2f", "..%5c", "%2e%2e%2f", "%2e%2e%5c", "%252e%252e%252f"]
+        repeat_min: 1
+        repeat_max: 4
+      - name: witness
+        alternatives: ["{marker}", "document.json", "resource.txt"]
+
+  - production_id: traversal-posix
+    sink_types: [filesystem, path]
+    dialects: [posix, unix]
+    template: "{prefix}{separator}{escape}{witness}"
+    slots:
+      - name: prefix
+        alternatives: [".pdf", "document.pdf", "report.pdf"]
+      - name: separator
+        alternatives: ["/"]
+      - name: escape
+        alternatives: ["../", "..%2f", "%2e%2e%2f", "%252e%252e%252f"]
+        repeat_min: 1
+        repeat_max: 4
+      - name: witness
+        alternatives: ["{marker}", "document.json", "resource.txt"]
+
+  - production_id: traversal-windows
+    sink_types: [filesystem, path]
+    dialects: [windows]
+    template: "{prefix}{separator}{escape}{witness}"
+    slots:
+      - name: prefix
+        alternatives: [".pdf", "document.pdf", "report.pdf"]
+      - name: separator
+        alternatives: ["\\"]
+      - name: escape
+        alternatives: ["..\\", "..%5c", "%2e%2e%5c"]
+        repeat_min: 1
+        repeat_max: 4
+      - name: witness
+        alternatives: ["{marker}", "document.json", "resource.txt"]
+
+  - production_id: nested-expression
+    sink_types: [interpreter]
+    dialects: [nested]
+    root: quoted
+    nodes:
+      - name: quoted
+        alternatives:
+          - elements:
+              - kind: terminal
+                alternatives:
+                  - value: "'"
+                  - value: "`"
+              - kind: reference
+                node: expression
+              - kind: terminal
+                alternatives:
+                  - value: "'"
+                    condition:
+                      prefix_contains: ["'"]
+                  - value: "`"
+                    condition:
+                      prefix_contains: ["`"]
+      - name: expression
+        alternatives:
+          - elements:
+              - kind: terminal
+                alternatives:
+                  - value: "{marker}"
+                    condition:
+                      dialects: [nested]
+                  - value: "value"
+          - elements:
+              - kind: terminal
+                alternatives:
+                  - value: "("
+              - kind: reference
+                node: expression
+                repeat_min: 1
+                repeat_max: 3
+              - kind: terminal
+                alternatives:
+                  - value: ")"

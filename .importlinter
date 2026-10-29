@@ -1,0 +1,311 @@
+[importlinter]
+root_package = cloud_dast
+include_external_packages = false
+
+[importlinter:contract:runtime-no-outer-layers]
+name = Campaign runtime must not import outer layers
+type = forbidden
+source_modules = cloud_dast.runtime
+forbidden_modules =
+    cloud_dast.api
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:verification-no-runtime-or-outer]
+name = Verification must not own runtime or outer layers
+type = forbidden
+source_modules = cloud_dast.verification
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:qdl-purity]
+name = QDL must remain declarative and runtime-independent
+type = forbidden
+source_modules = cloud_dast.qdl
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:model-purity]
+name = Core model must remain pure
+type = forbidden
+source_modules = cloud_dast.model
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.verification
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:infrastructure-no-upward]
+name = Infrastructure must not import runtime or composition
+type = forbidden
+source_modules = cloud_dast.infrastructure
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.composition
+
+
+[importlinter:contract:contracts-no-runtime]
+name = Core contracts must remain runtime-independent
+type = forbidden
+source_modules = cloud_dast.contracts
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.verification
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:grounding-no-campaign-consultation]
+name = Grounding must not depend on campaign consultation scheduling
+type = forbidden
+source_modules = cloud_dast.runtime.grounding
+forbidden_modules = cloud_dast.runtime.consultation
+
+[importlinter:contract:runtime-components-no-campaign-state]
+name = Runtime result owners must not depend on campaign state
+type = forbidden
+source_modules =
+    cloud_dast.runtime.differential.results
+    cloud_dast.runtime.differential.context
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.evidence_gate
+    cloud_dast.runtime.execution.state
+forbidden_modules =
+    cloud_dast.runtime.campaign.state
+    cloud_dast.runtime.campaign.runtime
+
+[importlinter:contract:physical-execution-no-coordination]
+name = Physical check execution must not depend on campaign coordination
+type = forbidden
+source_modules = cloud_dast.runtime.execution.checks
+forbidden_modules =
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.execution.scenarios
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.grounding
+    cloud_dast.runtime.scheduler
+    cloud_dast.runtime.deficits
+
+
+[importlinter:contract:outcome-policy-no-coordination]
+name = Consultation outcome policy must not depend on coordination
+type = forbidden
+source_modules = cloud_dast.runtime.consultation.outcomes
+forbidden_modules =
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.candidates
+    cloud_dast.runtime.deficits
+    cloud_dast.runtime.grounding
+    cloud_dast.runtime.evidence_gate
+    cloud_dast.runtime.scheduler
+
+[importlinter:contract:campaign-projection-no-coordination]
+name = Campaign read models must not depend on execution coordination
+type = forbidden
+source_modules =
+    cloud_dast.runtime.campaign.dag
+    cloud_dast.runtime.campaign.events
+    cloud_dast.runtime.campaign.replay
+forbidden_modules =
+    cloud_dast.runtime.campaign.state
+    cloud_dast.runtime.campaign.runtime
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.candidates
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.deficits
+    cloud_dast.runtime.grounding
+    cloud_dast.runtime.scheduler
+
+
+[importlinter:contract:campaign-modules-acyclic]
+name = Campaign projection and lifecycle modules must not form import cycles
+type = acyclic_siblings
+ancestors = cloud_dast.runtime.campaign
+depth = 0
+
+
+[importlinter:contract:candidate-engine-no-accumulators]
+name = Candidate execution must not depend on accumulators or recording owners
+type = forbidden
+source_modules = cloud_dast.runtime.candidates.session
+forbidden_modules =
+    cloud_dast.runtime.execution.state
+    cloud_dast.runtime.execution.terminal
+    cloud_dast.runtime.observation_recording
+    cloud_dast.runtime.observation_effects
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.scheduler
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.grounding
+
+[importlinter:contract:recording-no-candidate-engine]
+name = Observation and terminal owners must not depend on candidate policy
+type = forbidden
+source_modules =
+    cloud_dast.runtime.observation_recording
+    cloud_dast.runtime.observation_effects
+    cloud_dast.runtime.execution.terminal
+forbidden_modules = cloud_dast.runtime.candidates
+
+
+[importlinter:contract:evidence-lookup-no-latency-state]
+name = Consultation evidence lookup must not depend on latency state
+type = forbidden
+source_modules = cloud_dast.runtime.consultation.evidence
+forbidden_modules = cloud_dast.verification.oracles.latency
+
+
+[importlinter:contract:field-projections-no-coordination]
+name = Executable field projections must not depend on runtime coordination
+type = forbidden
+source_modules =
+    cloud_dast.runtime.grammar_facts
+    cloud_dast.runtime.reference_projection
+    cloud_dast.runtime.payload_hints
+forbidden_modules =
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.grounding
+    cloud_dast.runtime.candidates
+    cloud_dast.runtime.scheduler
+    cloud_dast.runtime.deficits
+
+
+[importlinter:contract:deficit-state-no-scheduling]
+name = Deficit lifecycle state must not depend on scheduling or campaign coordination
+type = forbidden
+source_modules = cloud_dast.runtime.deficits.lifecycle
+forbidden_modules =
+    cloud_dast.runtime.deficits.queue
+    cloud_dast.runtime.deficits.wave
+    cloud_dast.runtime.deficits.dispatch
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.scheduler
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.grounding
+    cloud_dast.runtime.consultation.outcomes
+
+[importlinter:contract:deficit-policies-no-state-owner]
+name = Deficit planning and propagation must not depend on the mutable state owner
+type = forbidden
+source_modules =
+    cloud_dast.runtime.deficits.wave
+    cloud_dast.runtime.deficits.propagation
+forbidden_modules =
+    cloud_dast.runtime.deficits.lifecycle
+    cloud_dast.runtime.deficits.queue
+
+
+[importlinter:contract:public-api-no-implementation]
+name = Public API contracts must not depend on runtime or verification implementations
+type = forbidden
+source_modules = cloud_dast.api
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.verification
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+
+[importlinter:contract:scheduler-state-no-policy-coordination]
+name = Scheduler state must not depend on ranking or runtime coordination
+type = forbidden
+source_modules = cloud_dast.runtime.scheduler.model
+forbidden_modules =
+    cloud_dast.runtime.scheduler.core
+    cloud_dast.runtime.scheduler.selection
+    cloud_dast.runtime.scheduler.registry
+    cloud_dast.runtime.scheduler.prewarm
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.consultation
+
+[importlinter:contract:scheduler-ranking-no-coordination]
+name = Scheduler ranking must not depend on readiness or coordination
+type = forbidden
+source_modules = cloud_dast.runtime.scheduler.selection
+forbidden_modules =
+    cloud_dast.runtime.scheduler.core
+    cloud_dast.runtime.scheduler.registry
+    cloud_dast.runtime.scheduler.prewarm
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.execution
+    cloud_dast.runtime.consultation
+
+
+[importlinter:contract:grounding-scheduler-no-stage-coordination]
+name = Grounding task scheduling must not depend on stage or campaign coordination
+type = forbidden
+source_modules = cloud_dast.runtime.grounding.axes.scheduler
+forbidden_modules =
+    cloud_dast.runtime.grounding.startup
+    cloud_dast.runtime.grounding.reactive
+    cloud_dast.runtime.grounding.lifecycle
+    cloud_dast.runtime.grounding.runtime
+    cloud_dast.runtime.campaign
+    cloud_dast.runtime.consultation
+    cloud_dast.runtime.deficits
+
+
+[importlinter:contract:consultation-worker-no-owner-state]
+name = Consultation worker must not depend on wave or mutable owner state
+type = forbidden
+source_modules = cloud_dast.runtime.consultation.calls
+forbidden_modules =
+    cloud_dast.runtime.consultation.wave
+    cloud_dast.runtime.consultation.commit
+    cloud_dast.runtime.consultation.context
+    cloud_dast.runtime.deficits.queue
+    cloud_dast.runtime.evidence_gate
+    cloud_dast.runtime.execution.state
+    cloud_dast.runtime.campaign
+
+[importlinter:contract:consultation-commit-no-wave-coordination]
+name = Consultation commit must not depend on wave or campaign coordination
+type = forbidden
+source_modules = cloud_dast.runtime.consultation.commit
+forbidden_modules =
+    cloud_dast.runtime.consultation.wave
+    cloud_dast.runtime.replanning
+    cloud_dast.runtime.campaign.state
+    cloud_dast.runtime.campaign.runtime
+    cloud_dast.runtime.campaign.initialization
+    cloud_dast.runtime.campaign.finalization
+
+
+[importlinter:contract:startup-grounding-no-reactive-owner]
+name = Startup grounding must not depend on reactive or campaign grounding owners
+type = forbidden
+source_modules = cloud_dast.runtime.grounding.startup
+forbidden_modules =
+    cloud_dast.runtime.grounding.reactive
+    cloud_dast.runtime.grounding.consultation
+    cloud_dast.runtime.grounding.variance
+    cloud_dast.runtime.grounding.lifecycle
+    cloud_dast.runtime.grounding.runtime
+
+[importlinter:contract:reactive-grounding-no-startup-resources]
+name = Reactive grounding must not depend on startup scheduling or caching
+type = forbidden
+source_modules = cloud_dast.runtime.grounding.reactive
+forbidden_modules =
+    cloud_dast.runtime.grounding.startup
+    cloud_dast.runtime.grounding.axes.scheduler
+    cloud_dast.runtime.grounding.axes.cache
+    cloud_dast.runtime.grounding.lifecycle
+    cloud_dast.runtime.grounding.runtime
+
+
+[importlinter:contract:deficit-discovery-no-executor-implementation]
+name = Deficit discovery must not depend on physical executor implementations
+type = forbidden
+source_modules = cloud_dast.runtime.deficits.collection
+forbidden_modules =
+    cloud_dast.runtime.execution.runner
+    cloud_dast.runtime.execution.assembly
+    cloud_dast.runtime.campaign.runtime

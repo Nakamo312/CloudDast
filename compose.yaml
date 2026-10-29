@@ -1,0 +1,62 @@
+services:
+  cloud-dast:
+    build:
+      context: .
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.org/simple}
+    environment:
+      CLOUD_DAST_DESCRIPTOR_SET: /run/config/private-api.pb
+      CLOUD_DAST_STAND_SOURCE: file
+      CLOUD_DAST_STAND_FILE: /run/config/stand.json
+      CLOUD_DAST_CONTRACT_FILE: /run/config/contract.json
+      CLOUD_DAST_FORMAL_STORE: sqlite
+      CLOUD_DAST_FORMAL_SQLITE_PATH: /var/lib/cloud-dast/formal.sqlite3
+      CLOUD_DAST_EVENT_LOG: /var/lib/cloud-dast/events.jsonl
+      CLOUD_DAST_MODEL_URL: ${CLOUD_DAST_MODEL_URL:?set CLOUD_DAST_MODEL_URL in .env}
+      CLOUD_DAST_MODEL_ID: ${CLOUD_DAST_MODEL_ID:?set CLOUD_DAST_MODEL_ID in .env}
+      CLOUD_DAST_MODEL_API: ${CLOUD_DAST_MODEL_API:-chat}
+      CLOUD_DAST_MODEL_REASONING_EFFORT: ${CLOUD_DAST_MODEL_REASONING_EFFORT:-}
+      CLOUD_DAST_MODEL_TIMEOUT: ${CLOUD_DAST_MODEL_TIMEOUT:-60}
+      CLOUD_DAST_MODEL_RETRIES: ${CLOUD_DAST_MODEL_RETRIES:-2}
+      CLOUD_DAST_LOG_LEVEL: ${CLOUD_DAST_LOG_LEVEL:-INFO}
+      CLOUD_DAST_MODEL_TOKEN_FILE: /run/secrets/glm_api_key
+      CLOUD_DAST_IAM_TOKEN_FILE: /run/secrets/iam_token
+      CLOUD_DAST_ALLOWED_SERVICES: ${CLOUD_DAST_ALLOWED_SERVICES:?set CLOUD_DAST_ALLOWED_SERVICES in .env}
+      CLOUD_DAST_ALLOWED_METHODS: ${CLOUD_DAST_ALLOWED_METHODS:-*}
+      CLOUD_DAST_ALLOWED_IDENTITIES: ${CLOUD_DAST_ALLOWED_IDENTITIES:?set CLOUD_DAST_ALLOWED_IDENTITIES in .env}
+    command:
+      - --service
+      - ${CLOUD_DAST_SERVICE:?set CLOUD_DAST_SERVICE in .env}
+      - --identity
+      - ${CLOUD_DAST_IDENTITY}
+      - --principal-id
+      - ${CLOUD_DAST_PRINCIPAL_ID:?set CLOUD_DAST_PRINCIPAL_ID in .env}
+      - --resource-id
+      - ${CLOUD_DAST_RESOURCE_ID:?set CLOUD_DAST_RESOURCE_ID in .env}
+      - --environment
+      - ${CLOUD_DAST_ENDPOINT_ENVIRONMENT:-preprod}
+    secrets:
+      - source: glm_api_key
+        target: glm_api_key
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: iam_token
+        target: iam_token
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    volumes:
+      - event_data:/var/lib/cloud-dast
+      - ${CLOUD_DAST_DESCRIPTOR_SET_HOST:?set CLOUD_DAST_DESCRIPTOR_SET_HOST in .env}:/run/config/private-api.pb:ro
+      - ${CLOUD_DAST_STAND_FILE_HOST:?set CLOUD_DAST_STAND_FILE_HOST in .env}:/run/config/stand.json:ro
+      - ${CLOUD_DAST_CONTRACT_FILE_HOST:?set CLOUD_DAST_CONTRACT_FILE_HOST in .env}:/run/config/contract.json:ro
+
+volumes:
+  event_data:
+
+secrets:
+  glm_api_key:
+    file: ${GLM_API_KEY_FILE:-./secrets/glm_api_key}
+  iam_token:
+    file: ${IAM_TOKEN_FILE:-./secrets/iam_attacker}
