@@ -232,6 +232,7 @@ def physical_readback(request, verification_plan, invariant):
             write_method,
             read_method,
             "order_id",
+            mutable_fields=("total", "note"),
             read_resource_types=(("order_id", "order"),),
         ),
         live,

@@ -33,7 +33,7 @@ from cloud_dast.verification.evidence import (
     build_evidence_view,
     build_paired_evidence_view,
 )
-from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles import latency
 from cloud_dast.verification.slices import (
     build_sibling_action_slice,
 )
@@ -50,7 +50,7 @@ class Coordinator:
         grounding_runner: GroundingRunner | None,
         batch_timeout: float,
         reactive_max_workers: int,
-        latency_oracle: LatencyOracle | None,
+        latency_oracle: latency.Oracle | None,
         policy: OutcomePolicy,
         invoker: Invoker,
         committer: Committer,

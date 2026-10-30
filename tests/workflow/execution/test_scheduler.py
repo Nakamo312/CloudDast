@@ -4,6 +4,7 @@ import logging
 
 import pytest
 
+import cloud_dast.verification.oracles.latency
 from cloud_dast.contracts.plan import (
     InvariantProjection,
     QdlExecutionPath,
@@ -26,7 +27,6 @@ from cloud_dast.runtime.prioritization import InterestPrioritizer
 from cloud_dast.runtime.scheduler import (
     CoverageDrivenScheduler,
 )
-from cloud_dast.verification.oracles.latency import LatencyOracle
 
 
 def make_step(step_id: str, effect=None, action_id: str = "get") -> QdlExecutionStep:
@@ -741,7 +741,7 @@ def test_retry_exhaustion_preserves_completed_superseded_and_in_flight_paths() -
 
 
 def test_duration_paths_wait_for_latency_baseline() -> None:
-    oracle = LatencyOracle()
+    oracle = cloud_dast.verification.oracles.latency.Oracle()
     effect = duration(Atom(value="action:get"), Atom(value=100))
     scheduler = CoverageDrivenScheduler(
         (make_path("latency", effect=effect),),
@@ -760,7 +760,7 @@ def test_duration_paths_wait_for_latency_baseline() -> None:
 
 
 def test_duration_bootstrap_waits_for_other_action_work() -> None:
-    oracle = LatencyOracle()
+    oracle = cloud_dast.verification.oracles.latency.Oracle()
     latency = make_path(
         "latency", effect=duration(Atom(value="action:get"), Atom(value=100))
     )

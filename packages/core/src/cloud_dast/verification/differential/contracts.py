@@ -35,7 +35,7 @@ _PROFILE_FACTORS: tuple[ProfileFactor, ...] = get_args(ProfileFactor)
 
 
 @dataclass(frozen=True, slots=True)
-class DifferentialSpec:
+class Spec:
     """A control/treatment scenario pair varying exactly one profile factor.
 
     The stands may differ in the parts the factor governs — another principal
@@ -88,7 +88,7 @@ def _profile_factors(profile: ScenarioProfile) -> tuple[object, ...]:
 class PayloadPairSpec:
     """A baseline/mutated-payload pair for one method and scenario.
 
-    Unlike :class:`DifferentialSpec` the legs do not vary a scenario
+    Unlike :class:`Spec` the legs do not vary a scenario
     profile factor: both run the same method, as the same principal,
     against the same stand — only the request payload differs.  The class
     validates the pairing contract (one method, one scenario, identical
@@ -126,7 +126,7 @@ class PayloadPairSpec:
         baseline: Check,
         *,
         canary: str,
-        mutable_fields: Iterable[str] | None = None,
+        mutable_fields: Iterable[str],
     ) -> PayloadPairSpec:
         """Build the pair by materializing payload fields on both legs.
 
@@ -142,11 +142,7 @@ class PayloadPairSpec:
         """
 
         fields = {field.name: field for field in method.request_schema.fields}
-        mutable = set(
-            mutable_fields
-            if mutable_fields is not None
-            else _payload_fields_from_baseline(method, scenario, baseline)
-        )
+        mutable = set(mutable_fields)
         benign: list[tuple[str, object]] = []
         mutated: list[tuple[str, object]] = []
         for name, value in baseline.request:
@@ -199,6 +195,7 @@ class ReadBackSpec:
     write_method: MethodSpec
     read_method: MethodSpec
     resource_binding: str
+    mutable_fields: tuple[str, ...]
     read_resource_types: tuple[tuple[str, str], ...] = ()
     """Grounded (field, resource type) pairs carried by the read legs."""
 
@@ -239,7 +236,7 @@ class ConcurrencyResult:
     probes: tuple[tuple[Check, Observation], ...]
 
 
-class DifferentialEvidenceView(Protocol):
+class EvidenceView(Protocol):
     """Read-only evidence boundary consumed by verification decisions."""
 
     def iter_readbacks(
@@ -275,38 +272,6 @@ def payload_fields(
             direction="input",
         )
         & MUTABLE_INPUT_ROLES
-    )
-
-
-def _payload_fields_from_baseline(
-    method: MethodSpec,
-    scenario: ScenarioPosition,
-    baseline: Check,
-) -> tuple[str, ...]:
-    """Recover the read-back fallback selection from resolved values.
-
-    Interim fallback for the frozen path-runner read-back call site, which
-    cannot thread role-resolved fields yet: object references reconstructed
-    from resolved stand values stay immutable, every other string field is
-    mutated.  New callers must pass role-resolved ``mutable_fields`` instead.
-    """
-
-    resource_ids = {
-        resource.resource_id
-        for resource in scenario.stand.resources
-        if resource.resource_id and not resource.resource_id.startswith("fixture:")
-    }
-    object_refs = {
-        name
-        for name, value in baseline.request
-        if isinstance(value, str) and value in resource_ids
-    }
-    return tuple(
-        field.name
-        for field in method.request_schema.fields
-        if field.type.lower() == "string"
-        and not field.repeated
-        and field.name not in object_refs
     )
 
 
@@ -520,6 +485,5 @@ def _mutating_actions(graph: QdlGraph) -> frozenset[str]:
             continue
         if effect.name not in _MUTATING_EFFECTS:
             continue
-        mutating.add(action)
         mutating.update(action_aliases(action))
     return frozenset(mutating)

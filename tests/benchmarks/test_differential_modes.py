@@ -72,14 +72,7 @@ from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.differential.comparator import (
     compare_observations,
 )
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
+from cloud_dast.verification.oracles import grounded, latency, primitive_router, witness
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_fuzzing.strategies.goal_payload import (
     GoalPayloadGenerator,
@@ -444,7 +437,7 @@ def _build_campaign(
     max_checks: int | None = None,
     target: Callable | None = None,
     scenario_repository: ScenarioRepo | None = None,
-    latency_oracle: LatencyOracle | None = None,
+    latency_oracle: latency.Oracle | None = None,
 ):
     """Assemble the full real-component campaign over the bench service."""
 
@@ -459,7 +452,7 @@ def _build_campaign(
     events = EventLog()
     bus = _bus(events)
     metrics = CampaignMetrics()
-    latency_oracle = latency_oracle or LatencyOracle()
+    latency_oracle = latency_oracle or latency.Oracle()
     checker = Checker(
         target or BenchTarget(BenchService(BenchState.seed())),
         GoalPayloadGenerator(TemplateGenerator()),
@@ -471,9 +464,9 @@ def _build_campaign(
     runner = assemble_runner(
         service_workflow,
         event_projection,
-        grounded_oracle=GroundedOutcomeOracle(),
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        grounded_oracle=grounded.Oracle(),
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(latency_oracle=latency_oracle)
         ),
         formal_repository=repository,
     )

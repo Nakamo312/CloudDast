@@ -72,7 +72,7 @@ FormalRepository
        -> SymbolicPrefilter
        -> FuzzSession
   -> Observation
-  -> PrimitiveOracleRouter
+  -> primitive_router.Oracle
   -> ObservationProjector
   -> FindingEvaluator
 ```
@@ -309,11 +309,11 @@ Ungrounded `FAIL`:
 
 | Primitive | Oracle | Детекция |
 |---|---|---|
-| P1 outcome | `GroundedOutcomeOracle` | observed vs graph-grounded expected outcome |
-| P2 response field | `FieldExposureOracle` | запрещённое поле в ответе |
+| P1 outcome | `grounded.Oracle` | observed vs graph-grounded expected outcome |
+| P2 response field | `field_exposure.Oracle` | запрещённое поле в ответе |
 | P3 OOB | `OobOracle` | callback коллаборатора |
-| P4 latency | `LatencyOracle` | duration vs baseline/threshold |
-| P5 marker/diff | `MarkerOracle` | маркер в ответе/trace |
+| P4 latency | `latency.Oracle` | duration vs baseline/threshold |
+| P5 marker/diff | `marker.Oracle` | маркер в ответе/trace |
 | P6 sequence | state machine / trace | достижение запрещённого состояния |
 
 Finding создаётся только при:
@@ -509,7 +509,7 @@ InvocationRepository    <- Neo4jInvocationRepository
 ScenarioRepository      <- CLOUD_DAST_STAND_SOURCE selection
 TestCaseGenerator       <- GoalPayloadGenerator(GeneratorSelector)
 FuzzSessionFactory      <- FuzzSession + River GeneratorBandit
-PrimitiveOracleRouter   <- P1..P6 oracles
+primitive_router.Oracle   <- P1..P6 oracles
 Guardrail               <- AllowlistGuardrail (deny by default)
 ```
 

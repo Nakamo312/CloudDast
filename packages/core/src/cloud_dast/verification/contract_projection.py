@@ -133,7 +133,7 @@ class ProjectionReport(BaseModel):
     conflict: tuple[ProjectionIssue, ...] = ()
 
 
-class ContractProjection(BaseModel):
+class Result(BaseModel):
     """The QDL graph and mapping report produced from a contract slice."""
 
     model_config = ConfigDict(frozen=True)
@@ -254,7 +254,7 @@ class ContractProjector:
     ) -> None:
         self._classification_profile = classification_profile or ClassificationProfile()
 
-    def project(self, graph_slice: ServiceGraphSlice) -> ContractProjection:
+    def project(self, graph_slice: ServiceGraphSlice) -> Result:
         self._validate_slice(graph_slice)
 
         states = {node.node_id: self._map_node(node) for node in graph_slice.nodes}
@@ -307,13 +307,13 @@ class ContractProjector:
             ambiguous=_sorted_issues(ambiguous),
             conflict=_sorted_issues(conflict),
         )
-        return ContractProjection(graph=graph, report=report)
+        return Result(graph=graph, report=report)
 
     def project_methods(
         self,
         service: str,
         methods: tuple[MethodSpec, ...],
-    ) -> ContractProjection:
+    ) -> Result:
         """Project method-only sources through the same contract pipeline.
 
         Binary input specifications and protocol message descriptions use this
@@ -1479,7 +1479,7 @@ def _sorted_issues(items: list[ProjectionIssue]) -> tuple[ProjectionIssue, ...]:
 
 __all__ = [
     "ClassificationProfile",
-    "ContractProjection",
+    "Result",
     "ContractProjector",
     "EXTENSION_PREDICATE_SCHEMAS",
     "MappedElement",

@@ -34,10 +34,7 @@ from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.checks import run_check
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.oracles import oob as verification_oob
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
+from cloud_dast.verification.oracles import primitive_router, witness
 from cloud_dast.verification.projection import (
     ObservationProjector,
 )
@@ -369,8 +366,8 @@ def test_in_memory_oob_chain_raises_finding(
     observation = run_check(check, target, events)
     assert observation.probe_marker == check.probe_marker
 
-    verdict = PrimitiveOracleRouter(
-        witness_oracle=WitnessSignalOracle(
+    verdict = primitive_router.Oracle(
+        witness_oracle=witness.Oracle(
             oob_oracle=oob.Coordinator(
                 store, verification_oob.Oracle(), wait_seconds=0.0
             )
@@ -567,8 +564,8 @@ def test_oob_collector_sweeps_router_candidate_late_callback(scenario_position) 
     marker = "router-late-callback"
     observation = _oob_observation(marker)
     collector = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
-    router = PrimitiveOracleRouter(
-        witness_oracle=WitnessSignalOracle(oob_oracle=collector)
+    router = primitive_router.Oracle(
+        witness_oracle=witness.Oracle(oob_oracle=collector)
     )
 
     timed_out = router.evaluate_policy(

@@ -33,7 +33,7 @@ from cloud_dast.verification.differential.modes import (
     TIMING_REPEATS,
 )
 from cloud_dast.verification.norms import NormView
-from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles import latency
 
 logger = logging.getLogger("cloud_dast.runtime.differential.campaign")
 
@@ -45,7 +45,7 @@ class ExperimentDeps:
     executor: ProbeExecutor
     diff_mode: bool
     diff_modes: frozenset[str]
-    latency_oracle: LatencyOracle | None = None
+    latency_oracle: latency.Oracle | None = None
     scenario_repository: ScenarioRepository | None = None
     formal_repository: FormalRepository | None = None
     event_bus: EventPublisher | None = None

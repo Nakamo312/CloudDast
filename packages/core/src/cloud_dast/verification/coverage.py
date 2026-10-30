@@ -37,10 +37,10 @@ from cloud_dast.qdl.graph import (
     Context,
     QdlGraph,
     Struct,
-    Term,
     Variable,
     canonical_json,
     changed,
+    term_label,
     transition,
 )
 from cloud_dast.qdl.graph import field as resource_field
@@ -705,7 +705,7 @@ class Builder:
                     continue
             else:
                 continue
-            action_id = _term_key(action)
+            action_id = term_label(action)
             if action_id is not None:
                 actions_by_effect.setdefault(canonical_json(effect), set()).add(
                     action_id
@@ -723,11 +723,11 @@ class Builder:
                 continue
             if compilation.effect.name != "transition":
                 continue
-            from_state = _term_key(compilation.effect.args[0])
-            to_state = _term_key(compilation.effect.args[1])
+            from_state = term_label(compilation.effect.args[0])
+            to_state = term_label(compilation.effect.args[1])
             if from_state is None or to_state is None:
                 continue
-            norm_id = _term_key(fact.args[0])
+            norm_id = term_label(fact.args[0])
             for action_id in actions_by_effect.get(
                 canonical_json(compilation.effect),
                 (),
@@ -836,9 +836,9 @@ def _plan_path_actions(
 
 def _service_id(graph: QdlGraph, context: Context) -> str:
     services = sorted(
-        _term_key(fact.args[0])
+        term_label(fact.args[0])
         for fact in graph.facts_for("is", contexts={context})
-        if len(fact.args) == 2 and _term_key(fact.args[1]) == "Service"
+        if len(fact.args) == 2 and term_label(fact.args[1]) == "Service"
     )
     return services[0] if services else ""
 
@@ -849,9 +849,9 @@ def _declared_identifiers(
     type_name: str,
 ) -> set[str]:
     return {
-        _term_key(fact.args[0])
+        term_label(fact.args[0])
         for fact in graph.facts_for("is", contexts={context})
-        if len(fact.args) == 2 and _term_key(fact.args[1]) == type_name
+        if len(fact.args) == 2 and term_label(fact.args[1]) == type_name
     }
 
 
@@ -867,7 +867,7 @@ def _field_units(
     """
 
     declarations = {
-        canonical_json(fact.args[0]): _term_key(fact.args[1])
+        canonical_json(fact.args[0]): term_label(fact.args[1])
         for fact in graph.facts_for("is", contexts=contexts)
         if len(fact.args) == 2
     }
@@ -904,7 +904,7 @@ def _field_units(
         else:
             continue
         action_term = field_term.args[0] if field_term.args else None
-        action_id = _term_key(action_term) if isinstance(action_term, Atom) else None
+        action_id = term_label(action_term) if isinstance(action_term, Atom) else None
         unit_for(field_term, _field_name(field_term), field_kind, action_id)
 
     for fact in graph.facts_for("part", contexts=contexts):
@@ -918,7 +918,7 @@ def _field_units(
             kind = "output"
         else:
             continue
-        unit_for(field_term, _field_name(field_term), kind, _term_key(action))
+        unit_for(field_term, _field_name(field_term), kind, term_label(action))
 
     for fact in graph.facts_for("exposes", contexts=contexts):
         if len(fact.args) != 2:
@@ -930,9 +930,9 @@ def _field_units(
             continue
         unit_for(
             witness,
-            _term_key(witness.args[1]),
+            term_label(witness.args[1]),
             "output",
-            _term_key(action),
+            term_label(action),
         )
 
     for fact in graph.facts_for("causes", contexts=contexts):
@@ -942,9 +942,9 @@ def _field_units(
         field_term = resource_field(effect.args[0], effect.args[1])
         unit_for(
             field_term,
-            _term_key(effect.args[1]),
+            term_label(effect.args[1]),
             "resource",
-            _term_key(action),
+            term_label(action),
         )
 
     return units
@@ -969,7 +969,7 @@ def _effect_units(
         norm, effect = fact.args
         if not isinstance(effect, Struct):
             continue
-        norms_by_effect[canonical_json(effect)].add(_term_key(norm))
+        norms_by_effect[canonical_json(effect)].add(term_label(norm))
 
     units: dict[str, _EffectUnit] = {}
     for fact in graph.facts:
@@ -982,7 +982,7 @@ def _effect_units(
             continue
         key = canonical_json(effect)
         unit = units.setdefault(key, _EffectUnit(effect=effect))
-        unit.action_ids.add(_term_key(action))
+        unit.action_ids.add(term_label(action))
         unit.norm_ids.update(norms_by_effect.get(key, ()))
 
     return units
@@ -990,14 +990,8 @@ def _effect_units(
 
 def _field_name(field_term: Struct) -> str:
     if field_term.name in {"input_field", "output_field", "field"}:
-        return _term_key(field_term.args[1])
+        return term_label(field_term.args[1])
     return canonical_json(field_term)
-
-
-def _term_key(term: Term) -> str:
-    if isinstance(term, Atom):
-        return str(term.value)
-    return canonical_json(term)
 
 
 def _action_ids_for_method(method_id: str) -> set[str]:
@@ -1052,21 +1046,21 @@ def _observations_by_target(
 
     observations: dict[tuple[str, str, Primitive], set[str]] = defaultdict(set)
     observed_ids = {
-        _term_key(fact.args[0])
+        term_label(fact.args[0])
         for fact in graph.facts_for("evidence", contexts={Context.RUNTIME})
     }
     for fact in graph.facts_for("evidence_target", contexts={Context.RUNTIME}):
         observation, _action, field_term, role, primitive = fact.args
-        observation_id = _term_key(observation)
+        observation_id = term_label(observation)
         if observation_id not in observed_ids:
             continue
-        primitive_name = _term_key(primitive)
+        primitive_name = term_label(primitive)
         if primitive_name not in _PRIMITIVES:
             raise ValueError(f"unknown primitive: {primitive_name}")
         observations[
             (
                 canonical_json(field_term),
-                _term_key(role),
+                term_label(role),
                 primitive_name,
             )
         ].add(observation_id)
@@ -1083,7 +1077,7 @@ def _observations_by_effect(graph: QdlGraph) -> dict[str, set[str]]:
         observation, effect = fact.args
         if not isinstance(effect, Struct) or effect.name == "transition":
             continue
-        observations[canonical_json(effect)].add(_term_key(observation))
+        observations[canonical_json(effect)].add(term_label(observation))
     return dict(observations)
 
 
@@ -1092,14 +1086,14 @@ def _state_machine_transitions(
     context: Context,
 ) -> set[StateTransition]:
     return {
-        (_term_key(fact.args[0]), _term_key(fact.args[1]), _term_key(fact.args[2]))
+        (term_label(fact.args[0]), term_label(fact.args[1]), term_label(fact.args[2]))
         for fact in graph.facts_for("transition", contexts={context})
     }
 
 
 def _initial_states(graph: QdlGraph, context: Context) -> set[str]:
     return {
-        _term_key(fact.args[0])
+        term_label(fact.args[0])
         for fact in graph.facts_for("initial", contexts={context})
     }
 
@@ -1109,7 +1103,7 @@ def _forbidden_states(
     context: Context,
 ) -> set[ForbiddenState]:
     return {
-        (_term_key(fact.args[0]), _term_key(fact.args[1]))
+        (term_label(fact.args[0]), term_label(fact.args[1]))
         for fact in graph.facts_for("forbidden", contexts={context})
     }
 

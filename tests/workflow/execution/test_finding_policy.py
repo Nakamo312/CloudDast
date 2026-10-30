@@ -38,7 +38,7 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.findings import collect
-from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles import latency
 from cloud_dast.verification.taxonomy import ClassificationFacts
 
 
@@ -484,7 +484,7 @@ def test_finding_retains_recorded_worst_latency_witness() -> None:
     check = _check(invariant, ())
     previous = _observation(check).model_copy(update={"duration_ms": 1000.0})
     current = _observation(check).model_copy(update={"duration_ms": 10.0})
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     oracle.update_baseline(method, (10.0, 10.0, 10.0))
     verdict = oracle.evaluate_policy(invariant, (previous, current), method_id=method)
     assert verdict.status is VerdictStatus.FAIL

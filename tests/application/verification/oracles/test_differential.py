@@ -13,11 +13,7 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, changed
-from cloud_dast.verification.oracles import (
-    DifferentialOracle,
-    NormView,
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import NormView, differential, primitive_router
 
 
 def _invariant(field: str) -> InvariantProjection:
@@ -132,7 +128,7 @@ def _probe(
 
 
 def test_changed_field_fails_deterministically() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         _trace((("order.total", 10),), (("order.total", 20),)),
     )
@@ -145,7 +141,7 @@ def test_changed_field_fails_deterministically() -> None:
 
 
 def test_unchanged_field_passes() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         _trace((("order.total", 10),), (("order.total", 10),)),
     )
@@ -156,7 +152,7 @@ def test_unchanged_field_passes() -> None:
 
 
 def test_single_observation_without_state_projection_is_unscoreable() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (_observation((("order.total", 10),)),),
     )
@@ -175,7 +171,7 @@ def test_write_state_projection_scores_changed_field() -> None:
         state_after=(("total", 20),),
     )
 
-    verdict = DifferentialOracle().evaluate_policy(_invariant("total"), (write,))
+    verdict = differential.Oracle().evaluate_policy(_invariant("total"), (write,))
 
     assert verdict.status is VerdictStatus.FAIL
     assert verdict.deterministic is True
@@ -189,7 +185,7 @@ def test_write_state_projection_scores_changed_field() -> None:
 def test_write_state_projection_requires_both_states() -> None:
     write = _state_observation(state_after=(("total", 20),))
 
-    verdict = DifferentialOracle().evaluate_policy(_invariant("total"), (write,))
+    verdict = differential.Oracle().evaluate_policy(_invariant("total"), (write,))
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.deterministic is True
@@ -206,7 +202,7 @@ def test_changed_norm_routes_one_write_state_projection(
         state_after=(("total", 20),),
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         _invariant("total"),
         (write,),
         method=method_spec,
@@ -229,7 +225,7 @@ def test_transport_error_on_write_is_recovered_by_paired_reads(
     write = _observation((), outcome=outcome, error_reason="transport unavailable")
     after = _observation((("order.total", 10),))
 
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (before, write, after),
     )
@@ -251,7 +247,7 @@ def test_transport_error_on_write_does_not_hide_a_real_change(
     write = _observation((), outcome=outcome, error_reason="transport unavailable")
     after = _observation((("order.total", 20),))
 
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (before, write, after),
     )
@@ -272,7 +268,7 @@ def test_transport_error_without_state_evidence_remains_unscoreable() -> None:
         error_reason="transport unavailable",
     )
 
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (before, write, after),
     )
@@ -295,7 +291,7 @@ def test_transport_error_on_read_is_recovered_from_trace_resource_state() -> Non
         error_reason="transport unavailable",
     )
 
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (before, write, after),
     )
@@ -324,7 +320,7 @@ def test_both_transport_errors_are_recovered_from_write_state() -> None:
         error_reason="transport unavailable",
     )
 
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         (before, write, after),
     )
@@ -337,7 +333,7 @@ def test_both_transport_errors_are_recovered_from_write_state() -> None:
 
 
 def test_nested_response_tree_path_is_supported() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("metadata.owner"),
         _trace(
             (("response.metadata.owner", "owner-a"),),
@@ -350,7 +346,7 @@ def test_nested_response_tree_path_is_supported() -> None:
 
 
 def test_multiple_suffix_matches_are_compared_deterministically() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         _trace(
             (
@@ -369,7 +365,7 @@ def test_multiple_suffix_matches_are_compared_deterministically() -> None:
 
 
 def test_missing_field_in_either_read_is_unscoreable() -> None:
-    verdict = DifferentialOracle().evaluate_policy(
+    verdict = differential.Oracle().evaluate_policy(
         _invariant("total"),
         _trace((("order.state", "open"),), (("order.total", 20),)),
     )
@@ -385,7 +381,7 @@ def test_changed_norm_uses_differential_router_primitive(
     invariant = _invariant("total")
 
     assert NormView.from_invariant(invariant).primitive == "differential"
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         invariant,
         _trace((("order.total", 10),), (("order.total", 20),)),
         method=method_spec,
@@ -397,7 +393,7 @@ def test_changed_norm_uses_differential_router_primitive(
 
 
 def test_concurrency_state_change_fails_deterministically() -> None:
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=tuple(_probe(index) for index in range(4)),
@@ -414,7 +410,7 @@ def test_concurrency_state_change_fails_deterministically() -> None:
 
 
 def test_concurrency_unchanged_state_passes() -> None:
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=tuple(_probe(index) for index in range(4)),
@@ -437,7 +433,7 @@ def test_concurrency_transport_error_is_recovered_from_probe_state() -> None:
         for index in range(4)
     )
 
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=probes,
@@ -465,7 +461,7 @@ def test_concurrency_read_errors_are_recovered_from_probe_state() -> None:
         for index in range(4)
     )
 
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation(
             (),
@@ -496,7 +492,7 @@ def test_one_successful_concurrency_probe_is_not_a_race_witness() -> None:
         _probe(3, outcome=AccessOutcome.ERROR),
     )
 
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=probes,
@@ -510,7 +506,7 @@ def test_one_successful_concurrency_probe_is_not_a_race_witness() -> None:
 
 
 def test_concurrency_probe_must_align_with_the_norm_method() -> None:
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=tuple(_probe(index, method_id="DeleteOrder") for index in range(4)),
@@ -523,7 +519,7 @@ def test_concurrency_probe_must_align_with_the_norm_method() -> None:
 
 
 def test_concurrency_requires_a_method_id() -> None:
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=tuple(_probe(index) for index in range(4)),
@@ -537,7 +533,7 @@ def test_concurrency_requires_a_method_id() -> None:
 def test_duplicate_concurrency_observations_are_not_a_race_witness() -> None:
     probe = _probe(0)
 
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=(probe, probe),
@@ -553,7 +549,7 @@ def test_router_dispatches_concurrency_changed_norm(
     method_spec,
 ) -> None:
     update_method = method_spec.model_copy(update={"method_id": "UpdateOrder"})
-    verdict = PrimitiveOracleRouter().evaluate_concurrency_policy(
+    verdict = primitive_router.Oracle().evaluate_concurrency_policy(
         _invariant("total"),
         read_before=_observation((("total", 10),)),
         probes=tuple(_probe(index) for index in range(4)),

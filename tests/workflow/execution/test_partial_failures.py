@@ -33,7 +33,7 @@ from cloud_dast.runtime.execution.scenarios import (
     PartialExecutionError,
     ReadBackPartialResult,
 )
-from cloud_dast.verification.differential.contracts import DifferentialSpec
+from cloud_dast.verification.differential import contracts
 from cloud_dast_fuzzing import TemplateGenerator
 from tests.support.guardrails import AllowAllGuardrail
 
@@ -315,7 +315,7 @@ def test_blocked_pair_retains_only_current_attempts(
     with pytest.raises(PartialExecutionError) as caught:
         runner.differential.execute_step_pair(
             step,
-            None if payload else DifferentialSpec(owner, scenario_position),
+            None if payload else contracts.Spec(owner, scenario_position),
             budget,
             **options,
         )

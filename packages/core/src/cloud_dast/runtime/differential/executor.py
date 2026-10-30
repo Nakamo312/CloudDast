@@ -29,9 +29,9 @@ from cloud_dast.runtime.differential.results import (
 from cloud_dast.runtime.execution.calls import spend_calls
 from cloud_dast.runtime.execution.checks import bind_event_context
 from cloud_dast.runtime.execution.scenarios import Checker
+from cloud_dast.verification.differential import contracts
 from cloud_dast.verification.differential.contracts import (
     ConcurrencyResult,
-    DifferentialSpec,
     PayloadPairSpec,
     ReadBackResult,
     ReadBackSpec,
@@ -70,7 +70,7 @@ class ProbeExecutor:
     def execute_step_pair(
         self,
         step: QdlExecutionStep,
-        spec: DifferentialSpec | None,
+        spec: contracts.Spec | None,
         budget: CallLimits,
         *,
         mutable_fields: tuple[str, ...] | None = None,
@@ -83,7 +83,7 @@ class ProbeExecutor:
         mode = "payload" if payload else "differential"
         steps = (step,)
         if not payload:
-            spec = cast(DifferentialSpec, spec)
+            spec = cast(contracts.Spec, spec)
             steps = tuple(
                 replace(
                     step,
@@ -194,7 +194,9 @@ class ProbeExecutor:
                 result=PartialExecutionResult((), ()),
             )
         step = prepared[0]
-        write_check = self._readback_write_check(step)
+        write_check = self._readback_write_check(
+            step, mutable_fields=spec.mutable_fields
+        )
         read_check = self._readback_read_check(
             step,
             spec.read_method,
@@ -385,7 +387,9 @@ class ProbeExecutor:
         ):
             return steps if budget.can_spend(live_calls) else None
 
-    def _readback_write_check(self, step: QdlExecutionStep) -> Check:
+    def _readback_write_check(
+        self, step: QdlExecutionStep, *, mutable_fields: tuple[str, ...]
+    ) -> Check:
         """Generate the canary-mutated write check for one read-back."""
 
         baseline = self.pair_check(step)
@@ -394,6 +398,7 @@ class ProbeExecutor:
             step.scenario,
             baseline,
             canary=payload_canary(step.method.method_id),
+            mutable_fields=mutable_fields,
         ).treatment
 
     def _readback_read_check(

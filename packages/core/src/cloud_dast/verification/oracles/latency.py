@@ -27,7 +27,7 @@ _TIMEOUT_REASON_MARKERS = (
 
 
 @dataclass(frozen=True, slots=True)
-class LatencyBaseline:
+class Baseline:
     """Runtime latency norm for one method."""
 
     method_id: str
@@ -44,7 +44,7 @@ class LatencyBaseline:
         durations: Sequence[float],
         *,
         min_samples: int = 3,
-    ) -> LatencyBaseline:
+    ) -> Baseline:
         values = tuple(float(value) for value in durations if value >= 0)
         if len(values) < min_samples:
             raise ValueError(
@@ -68,7 +68,7 @@ class LatencyBaseline:
         pairs: Sequence[tuple[float, float]],
         *,
         min_pairs: int = 3,
-    ) -> LatencyBaseline:
+    ) -> Baseline:
         """Build a baseline from paired control/probe duration deltas."""
 
         deltas = tuple(_paired_delta(pair) for pair in pairs)
@@ -177,12 +177,12 @@ class AvailabilityOracle:
         )
 
 
-class LatencyOracle:
+class Oracle:
     """Primitive P4: score abnormal response latency against a runtime baseline."""
 
     def __init__(
         self,
-        baselines: Mapping[str, LatencyBaseline] | None = None,
+        baselines: Mapping[str, Baseline] | None = None,
         *,
         availability_oracle: AvailabilityOracle | None = None,
         adversarial_target: bool = False,
@@ -192,7 +192,7 @@ class LatencyOracle:
         self._adversarial_target = adversarial_target
 
     @property
-    def baselines(self) -> Mapping[str, LatencyBaseline]:
+    def baselines(self) -> Mapping[str, Baseline]:
         return self._baselines
 
     def has_baseline(self, action_id: str) -> bool:
@@ -214,7 +214,7 @@ class LatencyOracle:
         if len(delivered_durations_ms) < min_samples:
             return
         normalized = normalize_action(action_id)
-        baseline = LatencyBaseline.from_durations(
+        baseline = Baseline.from_durations(
             normalized,
             delivered_durations_ms,
             min_samples=min_samples,
@@ -231,7 +231,7 @@ class LatencyOracle:
         if len(paired_durations) < 3:
             return
         normalized = normalize_action(action_id)
-        baseline = LatencyBaseline.from_paired_durations(
+        baseline = Baseline.from_paired_durations(
             normalized,
             paired_durations,
         )

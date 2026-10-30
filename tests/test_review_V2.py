@@ -31,7 +31,7 @@ from cloud_dast.verification.differential.contracts import (
 )
 from cloud_dast.verification.evaluation import ObservationEvaluator
 from cloud_dast.verification.norms import NormCompiler
-from cloud_dast.verification.oracles import PrimitiveOracleRouter
+from cloud_dast.verification.oracles import primitive_router
 from cloud_dast.verification.projection import ObservationProjector
 
 
@@ -128,7 +128,7 @@ def measurement(method_spec, scenario_position, invariant):
     assert Path(cloud_dast.__file__).is_relative_to(Path.cwd())
     norm_compiler = NormCompiler()
     evaluator = ObservationEvaluator(
-        primitive_oracle=PrimitiveOracleRouter(),
+        primitive_oracle=primitive_router.Oracle(),
         observation_projector=ObservationProjector(),
         build_evidence_key=ProbeExecutor.build_evidence_key,
         norm_compiler=norm_compiler,

@@ -295,7 +295,7 @@ methods, couplings, versioned path id. Только после этого schedu
 1. **Domain FSM** (`formal/state_machine.py`) — машина состояний самого
    приложения: обычные QDL-факты (`is/initial/transition/forbidden`),
    Clingo-запросы `solve()/find_paths()/mismatches()`. Кормит planning
-   (state/forbidden paths), coverage (state-матрица) и SequenceOracle (P6).
+   (state/forbidden paths), coverage (state-матрица) и sequence.Oracle (P6).
 2. **Campaign FSM** (`runtime/metrics.py`) — lifecycle проверки:
    `PENDING → READY → EXECUTING → OBSERVED → VERIFIED/UNSCOREABLE/BLOCKED`
    с явной таблицей `INTENT_TRANSITIONS`. Сейчас — metrics/reward-machine, не
@@ -383,7 +383,7 @@ accepted-классификации (source/evidence provenance), гипотез
    sweep до ordinary execution (не потерять pre-state).
 4. Ordinary round: выбор пути → setup → Z3 prefilter → FuzzSession
    (бандит-стратегия) → GuardedTarget (endpoint policy → токен → transport)
-   → Observation → PrimitiveOracleRouter → events.
+   → Observation → primitive_router.Oracle → events.
 5. ObservationProjector → runtime QDL facts; DeficitQueue классифицирует
    блокировки; Backtracking ищет альтернативные ветки.
 6. Reactive LLM обрабатывает deficits → promoted facts → rebind →

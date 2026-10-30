@@ -26,11 +26,7 @@ from cloud_dast.qdl.graph import (
     reached,
     transition,
 )
-from cloud_dast.verification.oracles import (
-    MarkerOracle,
-    PrimitiveOracleRouter,
-    SequenceOracle,
-)
+from cloud_dast.verification.oracles import marker, primitive_router, sequence
 
 
 def _invariant(effect: Struct) -> InvariantProjection:
@@ -82,7 +78,7 @@ def test_imports_are_from_this_working_copy():
 @pytest.mark.parametrize("path", ["message", "rendered", "error_message", "payload"])
 @pytest.mark.parametrize("sink_type", ["template_engine", "interpreter", "renderer"])
 def test_reflection_with_carrier_and_source_type_is_not_sink_proof(path, sink_type):
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = marker.Oracle().evaluate_policy(
         _invariant(reached(Atom(value="action:Update"), Atom(value="sink:template"))),
         (_observation(response_tree=((path, "nonce:candidate"),)),),
         method_id="Update",
@@ -96,7 +92,7 @@ def test_reflection_with_carrier_and_source_type_is_not_sink_proof(path, sink_ty
 
 @pytest.mark.parametrize("action", ["Update", "action:Update"])
 def test_explicit_sink_channel_proves_exact_effect_without_type_or_echo(action):
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = marker.Oracle().evaluate_policy(
         _invariant(reached(Atom(value=action), Atom(value="sink:template"))),
         (_observation(trace=ExecutionTrace(steps=(_step(),))),),
         method_id="Update",
@@ -118,7 +114,7 @@ def test_explicit_sink_channel_proves_exact_effect_without_type_or_echo(action):
     ],
 )
 def test_unrelated_or_missing_sink_trace_is_not_proof(changes):
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = marker.Oracle().evaluate_policy(
         _invariant(reached(Atom(value="action:Update"), Atom(value="sink:template"))),
         (_observation(trace=ExecutionTrace(steps=(_step(**changes),))),),
         method_id="Update",
@@ -133,7 +129,7 @@ def test_router_preserves_explicit_sink_proof(method_spec, scenario_position):
     observation = _observation(
         trace=ExecutionTrace(steps=(_step(method_id=method_spec.method_id),))
     )
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         _invariant(
             reached(Atom(value=method_spec.method_id), Atom(value="sink:template"))
         ),
@@ -160,7 +156,7 @@ def test_error_diagnostics_require_explicit_sink_corroboration(
         error_reason=text,
         trace=ExecutionTrace(steps=(_step(),)) if corroborated else None,
     )
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = marker.Oracle().evaluate_policy(
         _invariant(reached(Atom(value="action:Update"), Atom(value="sink:template"))),
         (observation,),
         method_id="Update",
@@ -187,7 +183,7 @@ def test_outcomes_and_success_counts_never_decide_named_flow(outcome, count):
         )
         for i in range(count)
     )
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _invariant(completed(Atom(value="flow:purchase"))),
         trace,
     )
@@ -211,7 +207,7 @@ def test_uncertain_transition_outcome_is_not_grounded_pass(outcome):
             )
         ),
     )
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _invariant(transition(Atom(value="created"), Atom(value="approved"))),
         (observation,),
         action_id="Update",
@@ -229,7 +225,7 @@ def test_validation_diagnostic_reflection_is_not_sink_proof(sink_type, code):
         response_summary="validation rejected input before sink invocation",
         transport_status=HttpStatus(code=code),
     )
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = marker.Oracle().evaluate_policy(
         _invariant(reached(Atom(value="action:Update"), Atom(value="sink:template"))),
         (observation,),
         method_id="Update",

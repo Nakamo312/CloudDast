@@ -57,7 +57,6 @@ from cloud_dast.qdl.graph import (
     Atom,
     Context,
     Fact,
-    Predicate,
     QdlGraph,
     Struct,
     canonical_json,
@@ -68,7 +67,9 @@ from cloud_dast.qdl.graph_ops import atom_value, merge_graphs
 from cloud_dast.verification.evidence_facts import (
     has_observation,
     observation_source_fact,
+    runtime_fact,
 )
+from cloud_dast.verification.witness import read_state
 
 
 class ObservationProjector:
@@ -93,18 +94,18 @@ class ObservationProjector:
         facts: dict[str, Fact] = {}
         _add_fact(
             facts,
-            _fact("is", (action, Atom(value="Action"))),
+            runtime_fact("is", (action, Atom(value="Action"))),
         )
         _add_fact(
             facts,
-            _fact(
+            runtime_fact(
                 "observed_response_status",
                 (action, Atom(value=observation.response_summary)),
             ),
         )
         _add_fact(
             facts,
-            _fact(
+            runtime_fact(
                 "observed_outcome",
                 (action, Atom(value=observation.observed_outcome.value)),
             ),
@@ -112,7 +113,7 @@ class ObservationProjector:
         if observation.duration_ms is not None:
             _add_fact(
                 facts,
-                _fact(
+                runtime_fact(
                     "observed_duration",
                     (action, Atom(value=observation.duration_ms)),
                 ),
@@ -122,7 +123,7 @@ class ObservationProjector:
             if token != observation.response_summary:
                 _add_fact(
                     facts,
-                    _fact(
+                    runtime_fact(
                         "observed_response_status",
                         (action, Atom(value=token)),
                     ),
@@ -130,7 +131,7 @@ class ObservationProjector:
         if observation.probe_marker is not None:
             _add_fact(
                 facts,
-                _fact(
+                runtime_fact(
                     "observed_marker",
                     (action, Atom(value=observation.probe_marker)),
                 ),
@@ -138,7 +139,7 @@ class ObservationProjector:
         if observation.auth_failed:
             _add_fact(
                 facts,
-                _fact(
+                runtime_fact(
                     "observed_error",
                     (action, Atom(value="auth_failure")),
                 ),
@@ -353,37 +354,39 @@ def _consume_inputs(
             if has_live_instance:
                 continue
         link = Struct(name="replacement", args=(old_observation, effect))
-        declaration = _fact("is", (effect, Atom(value="Effect")))
+        declaration = runtime_fact("is", (effect, Atom(value="Effect")))
         references = collect_references(
             effect, declaration.predicate.definition.arguments[0]
         )
         facts.extend(
-            _fact("is", fact.args)
+            runtime_fact("is", fact.args)
             for fact in view.facts
             if fact.predicate.name == "is"
             and canonical_json(fact.args[0]) in references
         )
         facts.extend(
             (
-                _fact("is", (obs, Atom(value="Observation"))),
-                _fact("is", (old_observation, Atom(value="Observation"))),
+                runtime_fact("is", (obs, Atom(value="Observation"))),
+                runtime_fact("is", (old_observation, Atom(value="Observation"))),
                 declaration,
-                _fact("is", (link, Atom(value="Node"))),
-                _fact("supersedes", (obs, link)),
+                runtime_fact("is", (link, Atom(value="Node"))),
+                runtime_fact("supersedes", (obs, link)),
             )
         )
     for instance, resource_type, value, old_observation, _ in consumed_rows:
         link = Struct(name="replacement", args=(old_observation, instance))
         facts.extend(
             (
-                _fact("is", (obs, Atom(value="Observation"))),
-                _fact("is", (instance, Atom(value="Resource"))),
-                _fact("is", (instance, resource_type)),
-                _fact("is", (value, Atom(value="Node"))),
-                _fact("evidence", (obs, Struct(name="has", args=(instance, value)))),
-                _fact("is", (old_observation, Atom(value="Observation"))),
-                _fact("is", (link, Atom(value="Node"))),
-                _fact("supersedes", (obs, link)),
+                runtime_fact("is", (obs, Atom(value="Observation"))),
+                runtime_fact("is", (instance, Atom(value="Resource"))),
+                runtime_fact("is", (instance, resource_type)),
+                runtime_fact("is", (value, Atom(value="Node"))),
+                runtime_fact(
+                    "evidence", (obs, Struct(name="has", args=(instance, value)))
+                ),
+                runtime_fact("is", (old_observation, Atom(value="Observation"))),
+                runtime_fact("is", (link, Atom(value="Node"))),
+                runtime_fact("supersedes", (obs, link)),
             )
         )
     return facts
@@ -468,7 +471,8 @@ def _effect_evidence(
             == tuple(arg.value for arg in effect.args if isinstance(arg, Atom))
         ):
             evidence = [
-                _fact("is", (state, Atom(value="State"))) for state in effect.args
+                runtime_fact("is", (state, Atom(value="State")))
+                for state in effect.args
             ]
         elif effect.args == (action,) and (
             (
@@ -481,14 +485,14 @@ def _effect_evidence(
                 and observation.observed_outcome is AccessOutcome.DENIED
             )
         ):
-            evidence = [_fact("is", (action, Atom(value="Action")))]
+            evidence = [runtime_fact("is", (action, Atom(value="Action")))]
         if not evidence:
             continue
         verified.append(effect)
         facts.extend(evidence)
-        facts.append(_fact("is", (effect, Atom(value="Effect"))))
+        facts.append(runtime_fact("is", (effect, Atom(value="Effect"))))
         facts.append(
-            _fact("evidence", (Atom(value=observation.observation_id), effect))
+            runtime_fact("evidence", (Atom(value=observation.observation_id), effect))
         )
     if facts:
         facts.extend(_observation_sources(observation, action))
@@ -498,10 +502,10 @@ def _effect_evidence(
 def _observation_sources(observation: Observation, action: Atom) -> list[Fact]:
     obs = Atom(value=observation.observation_id)
     return [
-        _fact("is", (obs, Atom(value="Observation"))),
+        runtime_fact("is", (obs, Atom(value="Observation"))),
         observation_source_fact(observation.observation_id),
         *(
-            _fact("evidence", (obs, source(Atom(value=kind), Atom(value=value))))
+            runtime_fact("evidence", (obs, source(Atom(value=kind), Atom(value=value))))
             for kind, value in (
                 ("check", observation.check_id),
                 ("scenario", observation.scenario_id),
@@ -528,7 +532,7 @@ def _provenance_facts(
     return [
         *_observation_sources(observation, action),
         *(
-            _fact("evidence", (obs, source(Atom(value=kind), Atom(value=value))))
+            runtime_fact("evidence", (obs, source(Atom(value=kind), Atom(value=value))))
             for kind, value in metadata
         ),
     ]
@@ -602,7 +606,7 @@ def read_observed_effects(
         references=references,
     )
     return tuple(
-        (_fact("evidence", (obs, effect)), check, timestamp)
+        (runtime_fact("evidence", (obs, effect)), check, timestamp)
         for name, (obs, effect, check, timestamp, *_) in rows
         if name == "_proof"
     )
@@ -998,9 +1002,9 @@ def _typed_binding_facts(
     obs = Atom(value=observation.observation_id)
     link = Struct(name="replacement", args=(witness, instance))
     return [
-        _fact("is", (obs, Atom(value="Observation"))),
-        _fact("is", (resource_type, Atom(value="ResourceType"))),
-        _fact(
+        runtime_fact("is", (obs, Atom(value="Observation"))),
+        runtime_fact("is", (resource_type, Atom(value="ResourceType"))),
+        runtime_fact(
             "is",
             (
                 witness,
@@ -1011,16 +1015,18 @@ def _typed_binding_facts(
                 ),
             ),
         ),
-        _fact("is", (instance, Atom(value="Resource"))),
-        _fact("is", (instance, resource_type)),
-        _fact("is", (instance_scope, Atom(value="Scope"))),
-        _fact("is", (observed_value, Atom(value="Node"))),
-        _fact("is", (link, Atom(value="Node"))),
-        _fact("part", (instance, instance_scope)),
-        _fact("has", (witness, instance)),
-        _fact("has", (instance, observed_value)),
-        _fact("evidence", (obs, Struct(name="has", args=(instance, observed_value)))),
-        _fact("evidence", (obs, Struct(name="has", args=(obs, link)))),
+        runtime_fact("is", (instance, Atom(value="Resource"))),
+        runtime_fact("is", (instance, resource_type)),
+        runtime_fact("is", (instance_scope, Atom(value="Scope"))),
+        runtime_fact("is", (observed_value, Atom(value="Node"))),
+        runtime_fact("is", (link, Atom(value="Node"))),
+        runtime_fact("part", (instance, instance_scope)),
+        runtime_fact("has", (witness, instance)),
+        runtime_fact("has", (instance, observed_value)),
+        runtime_fact(
+            "evidence", (obs, Struct(name="has", args=(instance, observed_value)))
+        ),
+        runtime_fact("evidence", (obs, Struct(name="has", args=(obs, link)))),
     ]
 
 
@@ -1252,7 +1258,7 @@ def _sink_facts(names: Iterable[object], action: Atom) -> list[Fact]:
 
 def _sink_fact(sink_name: object, action: Atom) -> Fact | None:
     try:
-        return _fact(
+        return runtime_fact(
             "observed_reached",
             (action, Atom(value=sink_name)),
         )
@@ -1272,7 +1278,7 @@ def _unmapped_fact(
     kind: str,
     reason: str,
 ) -> Fact:
-    return _fact(
+    return runtime_fact(
         "observed_unmapped",
         (
             action,
@@ -1299,7 +1305,7 @@ def _oob_event_facts(
         }
     )
     return [
-        _fact(
+        runtime_fact(
             "observed_external_call",
             (action, Atom(value=marker)),
         )
@@ -1314,7 +1320,7 @@ def _field_fact(
     """Build one shape-only field fact, skipping invalid names."""
 
     try:
-        return _fact(
+        return runtime_fact(
             "observed_field",
             (action, Atom(value=field_name)),
         )
@@ -1329,7 +1335,7 @@ def _error_reason_fact(
     """Build one error-channel fact from the redacted transport reason."""
 
     try:
-        return _fact(
+        return runtime_fact(
             "observed_error",
             (action, Atom(value=error_reason)),
         )
@@ -1350,8 +1356,8 @@ def _observed_transition(
     step = _trace_step(observation)
     if step is None:
         return None
-    state_before = _state_value(step.resource_state_before)
-    state_after = _state_value(step.resource_state_after)
+    state_before = read_state(step.resource_state_before)
+    state_after = read_state(step.resource_state_after)
     if state_before is None or state_after is None:
         return None
     return state_before, state_after
@@ -1372,13 +1378,6 @@ def _trace_step(observation: Observation) -> TraceStep | None:
     return matches[0]
 
 
-def _state_value(fields: tuple[tuple[str, JsonValue], ...]) -> str | None:
-    """Return the sole string value in one explicit resource-state channel."""
-
-    values = [value for _, value in fields if isinstance(value, str) and value]
-    return values[0] if len(values) == 1 else None
-
-
 def _transition_facts(
     action: Atom,
     state_before: str,
@@ -1387,16 +1386,16 @@ def _transition_facts(
     """Declare both states and emit grounded transition evidence."""
 
     facts = [
-        _fact("is", (Atom(value=state), Atom(value="State")))
+        runtime_fact("is", (Atom(value=state), Atom(value="State")))
         for state in dict.fromkeys((state_before, state_after))
     ]
     facts.extend(
         (
-            _fact(
+            runtime_fact(
                 "transition",
                 (action, Atom(value=state_before), Atom(value=state_after)),
             ),
-            _fact(
+            runtime_fact(
                 "observed_transition",
                 (action, Atom(value=state_before), Atom(value=state_after)),
             ),
@@ -1412,11 +1411,3 @@ def _add_fact(facts: dict[str, Fact], fact: Fact) -> None:
 def _extend_facts(facts: dict[str, Fact], additions: Iterable[Fact]) -> None:
     for fact in additions:
         _add_fact(facts, fact)
-
-
-def _fact(predicate: str, args: tuple[object, ...]) -> Fact:
-    return Fact(
-        context=Context.RUNTIME,
-        predicate=Predicate.from_name(predicate),
-        args=args,  # type: ignore[arg-type]
-    )

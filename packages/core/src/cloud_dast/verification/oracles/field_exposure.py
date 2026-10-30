@@ -17,7 +17,7 @@ from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.witness import response_is_incomplete
 
 
-class FieldExposureOracle:
+class Oracle:
     """Primitive P2: compare full response fields with a QDL visibility norm."""
 
     def evaluate_policy(

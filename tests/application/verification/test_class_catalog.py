@@ -172,7 +172,7 @@ def test_classify_identity_confusion_as_bola() -> None:
         Atom(value="principal:attacker"),
         Atom(value="principal:victim"),
     )
-    entry = DEFAULT_CATALOG.classify(_invariant(effect))
+    entry = DEFAULT_CATALOG.classify_finding(_invariant(effect)).entry
     assert entry is not None
     assert entry.class_id == "bola"
     assert "CWE-639" in entry.cwe
@@ -180,7 +180,7 @@ def test_classify_identity_confusion_as_bola() -> None:
 
 def test_classify_method_level_norm_as_function_authz() -> None:
     effect = allowed(Atom(value="action:list-certs"))
-    entry = DEFAULT_CATALOG.classify(_invariant(effect))
+    entry = DEFAULT_CATALOG.classify_finding(_invariant(effect)).entry
     assert entry is not None
     assert entry.class_id == "function_level_authz"
 
@@ -189,7 +189,7 @@ def test_privileged_permission_gap_classifies_as_function_authz() -> None:
     effect = allowed(Atom(value="action:delete-cert"))
     invariant = _invariant(effect)
 
-    entry = DEFAULT_CATALOG.classify(invariant)
+    entry = DEFAULT_CATALOG.classify_finding(invariant).entry
 
     assert entry is not None
     assert entry.class_id == "function_level_authz"
@@ -202,7 +202,7 @@ def test_allowed_object_reference_classifies_as_bola() -> None:
         _input_role_graph(action_id, "order_id", "object_ref")
     )
 
-    entry = DEFAULT_CATALOG.classify(_invariant(effect), facts=facts)
+    entry = DEFAULT_CATALOG.classify_finding(_invariant(effect), facts=facts).entry
 
     assert entry is not None
     assert entry.class_id == "bola"
@@ -258,7 +258,7 @@ def test_classify_dispatches_non_outcome_primitives() -> None:
         ),
     )
     for effect, class_id, facts in cases:
-        entry = DEFAULT_CATALOG.classify(_invariant(effect), facts=facts)
+        entry = DEFAULT_CATALOG.classify_finding(_invariant(effect), facts=facts).entry
         assert entry is not None
         assert entry.class_id == class_id
 
@@ -267,7 +267,9 @@ def test_changed_without_role_fact_is_a_classification_deficit() -> None:
     effect = changed(Atom(value="resource:user"), Atom(value="role"))
     invariant = _invariant(effect)
 
-    entry = DEFAULT_CATALOG.classify(invariant, facts=ClassificationFacts())
+    entry = DEFAULT_CATALOG.classify_finding(
+        invariant, facts=ClassificationFacts()
+    ).entry
     classification = DEFAULT_CATALOG.classify_finding(
         invariant,
         facts=ClassificationFacts(),
@@ -296,11 +298,11 @@ def test_classify_changed_by_input_role() -> None:
             )
         )
 
-        entry = DEFAULT_CATALOG.classify(
+        entry = DEFAULT_CATALOG.classify_finding(
             _invariant(effect),
             facts=facts,
             action_id="action:grpc:nsfy.shop.v1.KeyService.CreateApiKey",
-        )
+        ).entry
 
         assert entry is not None
         assert entry.class_id == class_id
@@ -313,11 +315,11 @@ def test_changed_classification_ignores_method_and_field_names() -> None:
         _input_role_graph(action_id, "zork", "privileged")
     )
 
-    entry = DEFAULT_CATALOG.classify(
+    entry = DEFAULT_CATALOG.classify_finding(
         _invariant(effect),
         facts=facts,
         action_id=action_id,
-    )
+    ).entry
 
     assert entry is not None
     assert entry.class_id == "mass_assignment"
@@ -342,11 +344,11 @@ def test_proposal_role_fact_does_not_classify_a_finding() -> None:
     )
     effect = changed(Atom(value="resource:widget"), Atom(value="zork"))
 
-    entry = DEFAULT_CATALOG.classify(
+    entry = DEFAULT_CATALOG.classify_finding(
         _invariant(effect),
         facts=ClassificationFacts.from_graph(proposal_graph),
         action_id=action_id,
-    )
+    ).entry
 
     assert entry is None
 
@@ -354,7 +356,7 @@ def test_proposal_role_fact_does_not_classify_a_finding() -> None:
 def test_classify_transition_as_state_machine_violation() -> None:
     effect = transition(Atom(value="paid"), Atom(value="shipped"))
 
-    entry = DEFAULT_CATALOG.classify(_invariant(effect))
+    entry = DEFAULT_CATALOG.classify_finding(_invariant(effect)).entry
 
     assert entry is not None
     assert entry.class_id == "state_machine_violation"
@@ -384,7 +386,7 @@ def test_reached_classifies_by_generic_sink_type(
         QdlGraph(facts=(_fact("is", (Atom(value=sink_id), Atom(value=sink_type))),))
     )
 
-    entry = DEFAULT_CATALOG.classify(_invariant(effect), facts=facts)
+    entry = DEFAULT_CATALOG.classify_finding(_invariant(effect), facts=facts).entry
 
     assert entry is not None
     assert entry.class_id == expected_class
@@ -397,7 +399,9 @@ def test_reached_without_sink_type_is_a_classification_deficit() -> None:
     )
     invariant = _invariant(effect)
 
-    entry = DEFAULT_CATALOG.classify(invariant, facts=ClassificationFacts())
+    entry = DEFAULT_CATALOG.classify_finding(
+        invariant, facts=ClassificationFacts()
+    ).entry
     classification = DEFAULT_CATALOG.classify_finding(
         invariant,
         facts=ClassificationFacts(),
@@ -563,7 +567,7 @@ def test_classify_without_norm_fact_returns_none() -> None:
         statement="legacy-only norm",
         severity=Severity.HIGH,
     )
-    entry = DEFAULT_CATALOG.classify(invariant)
+    entry = DEFAULT_CATALOG.classify_finding(invariant).entry
     assert entry is None
 
 

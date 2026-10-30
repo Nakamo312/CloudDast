@@ -16,14 +16,11 @@ from cloud_dast.qdl.graph_ops import atom_value
 VERIFIED_FACT_TYPE = "VerifiedFact"
 OBSERVATION_TYPE = "Observation"
 
-_IS = Predicate.from_name("is")
-_EVIDENCE = Predicate.from_name("evidence")
 
-
-def _runtime_fact(predicate: Predicate, args: tuple[object, ...]) -> Fact:
+def runtime_fact(predicate: str, args: tuple[object, ...]) -> Fact:
     return Fact(
         context=Context.RUNTIME,
-        predicate=predicate,
+        predicate=Predicate.from_name(predicate),
         args=args,  # type: ignore[arg-type]
     )
 
@@ -31,14 +28,14 @@ def _runtime_fact(predicate: Predicate, args: tuple[object, ...]) -> Fact:
 def verified_fact(fact_id: str) -> Fact:
     """Build the runtime declaration of one verified fact."""
 
-    return _runtime_fact(_IS, (Atom(value=fact_id), Atom(value=VERIFIED_FACT_TYPE)))
+    return runtime_fact("is", (Atom(value=fact_id), Atom(value=VERIFIED_FACT_TYPE)))
 
 
 def observation_source_fact(observation_id: str) -> Fact:
     """Link an observation to its durable provenance."""
 
-    return _runtime_fact(
-        _EVIDENCE,
+    return runtime_fact(
+        "evidence",
         (
             Atom(value=observation_id),
             source(Atom(value="observation"), Atom(value=observation_id)),
@@ -49,8 +46,8 @@ def observation_source_fact(observation_id: str) -> Fact:
 def evidence_fact(observation_id: str, field_name: str) -> Fact:
     """Build runtime evidence that a response field was observed."""
 
-    return _runtime_fact(
-        _EVIDENCE,
+    return runtime_fact(
+        "evidence",
         (
             Atom(value=observation_id),
             source(Atom(value="response_field"), Atom(value=field_name)),
@@ -161,6 +158,7 @@ __all__ = [
     "has_observation",
     "supports_dataflows",
     "observation_source_fact",
+    "runtime_fact",
     "verified_fact",
     "verified_fact_id",
     "verified_fact_ids",

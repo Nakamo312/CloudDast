@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import cloud_dast.verification.oracles.grounded
 from cloud_dast.composition.execution import assemble_runner
 from cloud_dast.contracts.execution import LiveRequest
 from cloud_dast.contracts.finding_examples import load_finding_examples
@@ -75,14 +76,7 @@ from cloud_dast.verification.differential.contracts import (
 )
 from cloud_dast.verification.evaluation import ObservationEvaluation
 from cloud_dast.verification.evidence_facts import verified_fact_id
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
+from cloud_dast.verification.oracles import latency, primitive_router, witness
 from cloud_dast_fuzzing import (
     FindingShrinker,
     FuzzSession,
@@ -1403,12 +1397,12 @@ def test_execute_round_keeps_prewarmed_duration_path_without_baseline(
     verification_plan,
     invariant,
 ) -> None:
-    latency_oracle = LatencyOracle()
+    latency_oracle = latency.Oracle()
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(latency_oracle=latency_oracle)
         ),
     )
     path = _latency_path(
@@ -1447,12 +1441,12 @@ def test_execute_round_runs_one_bootstrapped_duration_path(
     verification_plan,
     invariant,
 ) -> None:
-    latency_oracle = LatencyOracle()
+    latency_oracle = latency.Oracle()
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(latency_oracle=latency_oracle)
         ),
     )
     path = _latency_path(
@@ -1512,12 +1506,12 @@ def test_execute_round_executes_duration_path_after_baseline_release(
     verification_plan,
     invariant,
 ) -> None:
-    latency_oracle = LatencyOracle()
+    latency_oracle = latency.Oracle()
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(latency_oracle=latency_oracle)
         ),
     )
     path = _latency_path(
@@ -2272,7 +2266,7 @@ def test_sequence_prefilter_enforces_cross_action_coupling_in_live_path(
         target,
         fuzz_session_factory=lambda step: sessions.pop(0),
         symbolic_prefilter=SymbolicPrefilter(),
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
     )
 
     result = runner.execute_plan(
@@ -2347,7 +2341,7 @@ def test_sequence_prefilter_blocks_cross_action_unsat_before_live_calls(
         target,
         fuzz_session_factory=lambda step: sessions.pop(0),
         symbolic_prefilter=SymbolicPrefilter(),
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
     )
 
     result = runner.execute_plan(
@@ -2406,7 +2400,7 @@ def test_prefiltered_path_uses_next_for_each_executed_check(
         target,
         fuzz_session_factory=lambda step: fuzz_session,
         symbolic_prefilter=SymbolicPrefilter(),
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
     )
 
     result = runner.execute_plan(
@@ -2442,7 +2436,7 @@ def test_prefiltered_path_without_fuzz_session_executes_one_shot(
     runner, _ = _runner(
         target,
         symbolic_prefilter=SymbolicPrefilter(),
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
     )
 
     result = runner.execute_plan(
@@ -3047,7 +3041,7 @@ def test_path_preview_applies_only_to_its_emitted_candidate(
         target,
         fuzz_session_factory=factory,
         symbolic_prefilter=SymbolicPrefilter(),
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
     )
     request = LiveRequest(
         service=add.service,
@@ -3136,7 +3130,7 @@ def test_candidate_feedback_reads_only_its_receipt(
         checker,
         EventProjection(events, events),
         fuzz_session_factory=factory,
-        grounded_oracle=GroundedOutcomeOracle(),
+        grounded_oracle=cloud_dast.verification.oracles.grounded.Oracle(),
         formal_repository=SimpleNamespace(
             load_merged=lambda prefix: QdlGraph(),
             save=lambda *args, **kwargs: None,

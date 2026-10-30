@@ -13,7 +13,7 @@ FormalRepository
   -> BoundPathRunner
   -> FuzzSession
   -> ObservationProjector
-  -> PrimitiveOracleRouter
+  -> primitive_router.Oracle
   -> FindingEvaluator
 ```
 

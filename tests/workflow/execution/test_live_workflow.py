@@ -97,12 +97,8 @@ from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
 from cloud_dast.verification.evidence_facts import verified_fact_id
-from cloud_dast.verification.oracles import (
-    GroundedOutcomeOracle,
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import grounded, primitive_router, witness
 from cloud_dast.verification.oracles import oob as verification_oob
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,
@@ -559,8 +555,8 @@ def test_live_workflow_executes_accepted_qdl_norm(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -623,8 +619,8 @@ def test_live_workflow_final_sweep_reevaluates_late_oob_callback(
     runner = assemble_runner(
         checker,
         event_projection,
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(oob_oracle=collector)
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(oob_oracle=collector)
         ),
         formal_repository=repository,
     )
@@ -678,8 +674,8 @@ def test_concurrency_mode_saves_evidence_for_changed_norms(
     runner = assemble_runner(
         service,
         event_projection,
-        grounded_oracle=GroundedOutcomeOracle(),
-        primitive_oracle=PrimitiveOracleRouter(),
+        grounded_oracle=grounded.Oracle(),
+        primitive_oracle=primitive_router.Oracle(),
         formal_repository=repository,
     )
     workflow = _workflow(
@@ -758,8 +754,8 @@ def test_live_workflow_execution_does_not_imply_oracle_coverage(
         assemble_runner(
             _service((method_spec,), _allowed_target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -1397,8 +1393,8 @@ def test_forbidden_state_path_without_state_evidence_is_unscoreable(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -1525,8 +1521,8 @@ def test_readback_transition_does_not_prove_the_following_write(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -1580,7 +1576,7 @@ def test_readback_transition_does_not_prove_the_following_write(
             )
         }
     )
-    measured_verdict = PrimitiveOracleRouter().evaluate_policy(
+    measured_verdict = primitive_router.Oracle().evaluate_policy(
         transition_norm,
         result.observations[:3],
         method=ship_method,
@@ -1635,8 +1631,8 @@ def test_forbidden_state_transition_with_state_evidence_fails(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -1968,8 +1964,8 @@ def test_live_workflow_executes_paths_while_grounding_is_running(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -2083,8 +2079,8 @@ def test_generic_allowed_path_executes_before_grounding_completion(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -2168,8 +2164,8 @@ def test_live_workflow_rounds_are_idempotent_for_unchanged_paths(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -2377,8 +2373,8 @@ def _diff_campaign(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -3545,8 +3541,8 @@ def test_missing_irreversibility_without_observation_still_consults(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -3636,8 +3632,8 @@ def test_evidence_deficit_carries_deterministic_sibling_actions(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -3716,8 +3712,8 @@ def test_missing_irreversibility_with_observation_still_consults_model(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -3855,8 +3851,8 @@ def test_reactive_grounding_closes_deficit_and_executes_new_path(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -3970,8 +3966,8 @@ def test_irrelevant_promotion_does_not_buy_a_retry(
         assemble_runner(
             _service(methods, target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4075,8 +4071,8 @@ def test_response_shape_grounding_promotes_and_binds_response_norm(
         assemble_runner(
             _service((get_user,), target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4220,8 +4216,8 @@ def test_response_semantics_timeout_is_isolated_without_retry(
         assemble_runner(
             _service(methods, target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4340,8 +4336,8 @@ def test_reactive_grounding_preserves_cancellation_signal(
         assemble_runner(
             _service((get_user,), target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4495,8 +4491,8 @@ def test_fair_share_balances_deficit_classes_after_roles_work(
         assemble_runner(
             _service(methods, target, bus),
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4622,8 +4618,8 @@ def test_skip_mode_terminates_with_pending_deficits(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),
@@ -4679,8 +4675,8 @@ def test_rerun_into_same_event_log_is_visible_replay(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),

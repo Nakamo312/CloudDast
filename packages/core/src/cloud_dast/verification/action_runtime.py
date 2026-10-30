@@ -21,7 +21,7 @@ from cloud_dast.model.events import (
     DomainEvent,
     canonical_action_id,
 )
-from cloud_dast.qdl.graph import Atom, Context, QdlGraph, Term, canonical_json
+from cloud_dast.qdl.graph import Context, QdlGraph, term_label
 
 
 def declared_actions(
@@ -33,9 +33,9 @@ def declared_actions(
 
     return tuple(
         sorted(
-            _term_text(fact.args[0])
+            term_label(fact.args[0])
             for fact in graph.facts_for("is", contexts={context})
-            if len(fact.args) == 2 and _term_text(fact.args[1]) == "Action"
+            if len(fact.args) == 2 and term_label(fact.args[1]) == "Action"
         )
     )
 
@@ -146,9 +146,3 @@ def _step_actions(path: object) -> tuple[str, ...]:
         if isinstance(method_id, str):
             result.append(canonical_action_id(method_id))
     return tuple(result)
-
-
-def _term_text(term: Term) -> str:
-    if isinstance(term, Atom):
-        return str(term.value)
-    return canonical_json(term)

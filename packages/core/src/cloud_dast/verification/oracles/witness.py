@@ -20,11 +20,10 @@ from cloud_dast.model import (
 )
 from cloud_dast.ports import EvidenceEvent, OobEvaluator
 from cloud_dast.verification.norms import NormView
+from cloud_dast.verification.oracles import latency, marker
 from cloud_dast.verification.oracles.action_alignment import (
     explain_mismatch,
 )
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.marker import MarkerOracle
 from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.witness import (
     KnownContentWitness,
@@ -39,18 +38,18 @@ from cloud_dast.verification.witness import (
 )
 
 
-class WitnessSignalOracle:
+class Oracle:
     """Score class-free witness signals with deterministic primitives."""
 
     def __init__(
         self,
         *,
-        latency_oracle: LatencyOracle | None = None,
-        marker_oracle: MarkerOracle | None = None,
+        latency_oracle: latency.Oracle | None = None,
+        marker_oracle: marker.Oracle | None = None,
         oob_oracle: OobEvaluator | None = None,
     ) -> None:
-        self._latency = latency_oracle or LatencyOracle()
-        self._marker = marker_oracle or MarkerOracle()
+        self._latency = latency_oracle or latency.Oracle()
+        self._marker = marker_oracle or marker.Oracle()
         self._oob = oob_oracle
 
     def extract_signals(
@@ -100,10 +99,7 @@ class WitnessSignalOracle:
     ) -> PolicyVerdict:
         """Score the primitive named by a QDL norm without sink-class dispatch."""
 
-        try:
-            norm = NormView.from_invariant(invariant)
-        except ValueError:
-            norm = None
+        norm = _norm(invariant)
         if norm is None:
             return _unscoreable("witness-signal", "invariant has no QDL norm fact")
 

@@ -23,7 +23,7 @@ from cloud_dast.verification.witness import (
 )
 
 
-class MarkerOracle:
+class Oracle:
     """Primitive P5: verify a reached sink through explicit trace evidence.
 
     Response reflection and marker absence do not establish sink effects.
@@ -128,7 +128,7 @@ class MarkerOracle:
         )
         reflected = (
             any(
-                value_contains(value, marker) or _path_contains(path, marker)
+                value_contains(value, marker) or marker.casefold() in path.casefold()
                 for path, value in response_values(observation)
             )
             or marker in observation.response_summary
@@ -177,7 +177,3 @@ class MarkerOracle:
             grounded=False,
             deficits=deficits,
         )
-
-
-def _path_contains(path: str, marker: str) -> bool:
-    return marker.casefold() in path.casefold()

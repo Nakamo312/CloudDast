@@ -18,7 +18,7 @@ from cloud_dast.verification.oracles.action_alignment import (
 )
 
 
-class GroundedOutcomeOracle:
+class Oracle:
     """Compare an observed API outcome with permissions from the graph.
 
     This is primitive P1.  A finding is possible only when both the norm and
@@ -116,8 +116,7 @@ class GroundedOutcomeOracle:
             return (
                 normative_outcome,
                 False,
-                f"{_expectation_source()} expectation is hypothetical; "
-                "method has no permission norm",
+                "QDL norm expectation is hypothetical; method has no permission norm",
             )
         if not scenario.stand.permissions_known:
             if normative_outcome is None:
@@ -129,7 +128,7 @@ class GroundedOutcomeOracle:
             return (
                 normative_outcome,
                 False,
-                f"{_expectation_source()} expectation is hypothetical; "
+                "QDL norm expectation is hypothetical; "
                 "effective permissions are unknown",
             )
 
@@ -139,8 +138,7 @@ class GroundedOutcomeOracle:
             return (
                 normative_outcome,
                 False,
-                f"{_expectation_source()} conflicts with IAM facts; "
-                "result is a lead, not a finding",
+                "QDL norm conflicts with IAM facts; result is a lead, not a finding",
             )
         detail = (
             f"missing permissions: {', '.join(sorted(missing))}"
@@ -170,7 +168,3 @@ class GroundedOutcomeOracle:
             grounded=False,
             deficits=deficits,
         )
-
-
-def _expectation_source() -> str:
-    return "QDL norm"

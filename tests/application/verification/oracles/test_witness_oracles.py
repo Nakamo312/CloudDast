@@ -25,11 +25,10 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
     KnownContentWitness,
-    LatencyBaseline,
-    LatencyOracle,
     ObservationPair,
-    PrimitiveOracleRouter,
-    WitnessSignalOracle,
+    latency,
+    primitive_router,
+    witness,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
 
@@ -134,7 +133,7 @@ def test_signal_extraction_is_independent_of_expected_class() -> None:
 
 def test_configured_oob_oracle_contributes_a_nonblocking_signal() -> None:
     marker = "dast-oob-candidate"
-    oracle = WitnessSignalOracle(
+    oracle = witness.Oracle(
         oob_oracle=oob.Coordinator(
             _ReadyEventStore(
                 EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
@@ -161,7 +160,7 @@ def test_content_delta_pair_changes_the_grounded_witness_path() -> None:
         witness_path="count",
     )
 
-    verdict = WitnessSignalOracle().evaluate_pair(
+    verdict = witness.Oracle().evaluate_pair(
         invariant,
         pair,
         method_id="search",
@@ -183,7 +182,7 @@ def test_content_delta_pair_requires_a_response_difference() -> None:
         witness_path="count",
     )
 
-    verdict = WitnessSignalOracle().evaluate_pair(
+    verdict = witness.Oracle().evaluate_pair(
         invariant,
         pair,
         method_id="search",
@@ -201,7 +200,7 @@ def test_content_delta_pair_rejects_request_echo() -> None:
         witness_path="echo",
     )
 
-    verdict = WitnessSignalOracle().evaluate_pair(
+    verdict = witness.Oracle().evaluate_pair(
         invariant,
         pair,
         method_id="search",
@@ -231,7 +230,7 @@ def test_content_delta_preserves_echo_and_sink_precedence(
         witness_path=".QuErY.",
     )
 
-    verdict = WitnessSignalOracle().evaluate_pair(
+    verdict = witness.Oracle().evaluate_pair(
         _invariant(duration(Atom(value="action:search"), Atom(value=100))),
         pair,
         method_id="search",
@@ -265,7 +264,7 @@ def test_known_content_pair_requires_exact_selected_treatment_only_content(
         probe_marker="candidate",
     )
 
-    verdict = WitnessSignalOracle().evaluate_known_content_pair(
+    verdict = witness.Oracle().evaluate_known_content_pair(
         _invariant(reached(Atom(value="action:read"), Atom(value="sink:file"))),
         control,
         treatment,
@@ -293,7 +292,7 @@ def test_known_content_pair_preserves_diagnostic_order(
         response_tree=(("response.file", "known-content"),), probe_marker=marker
     ).model_copy(update={"output": ResponseData(field_names=("not_available",))})
 
-    verdict = WitnessSignalOracle().evaluate_known_content_pair(
+    verdict = witness.Oracle().evaluate_known_content_pair(
         _invariant(reached(Atom(value="action:read"), Atom(value="sink:file"))),
         control,
         treatment,
@@ -307,10 +306,10 @@ def test_known_content_pair_preserves_diagnostic_order(
 
 def test_latency_signal_uses_a_paired_baseline_without_sink_dispatch() -> None:
     invariant = _invariant(duration(Atom(value="action:search"), Atom(value=100)))
-    oracle = WitnessSignalOracle(
-        latency_oracle=LatencyOracle(
+    oracle = witness.Oracle(
+        latency_oracle=latency.Oracle(
             {
-                "search": LatencyBaseline.from_paired_durations(
+                "search": latency.Baseline.from_paired_durations(
                     "search",
                     ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
                 )
@@ -340,7 +339,7 @@ def test_known_content_is_a_class_free_witness() -> None:
         probe_marker=marker,
     )
 
-    verdict = WitnessSignalOracle().evaluate_known_content(
+    verdict = witness.Oracle().evaluate_known_content(
         invariant,
         observation,
         KnownContentWitness(content="known-file-content"),
@@ -363,7 +362,7 @@ def test_known_content_delta_requires_control_absence() -> None:
         probe_marker=marker,
     )
 
-    verdict = WitnessSignalOracle().evaluate_known_content_pair(
+    verdict = witness.Oracle().evaluate_known_content_pair(
         invariant,
         control,
         treatment,
@@ -389,7 +388,7 @@ def test_router_scores_marker_without_production_class_dispatch(
         probe_marker=marker,
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         invariant,
         (observation,),
         method=method_spec,
@@ -412,11 +411,11 @@ def test_router_scores_latency_without_production_class_dispatch(
             Atom(value=100),
         )
     )
-    router = PrimitiveOracleRouter(
-        witness_oracle=WitnessSignalOracle(
-            latency_oracle=LatencyOracle(
+    router = primitive_router.Oracle(
+        witness_oracle=witness.Oracle(
+            latency_oracle=latency.Oracle(
                 {
-                    method_spec.method_id: LatencyBaseline.from_paired_durations(
+                    method_spec.method_id: latency.Baseline.from_paired_durations(
                         method_spec.method_id,
                         ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
                     )
@@ -448,8 +447,8 @@ def test_router_scores_oob_without_production_class_dispatch(
             Atom(value=marker),
         )
     )
-    router = PrimitiveOracleRouter(
-        witness_oracle=WitnessSignalOracle(
+    router = primitive_router.Oracle(
+        witness_oracle=witness.Oracle(
             oob_oracle=oob.Coordinator(
                 _ReadyEventStore(
                     EvidenceEvent(
@@ -487,7 +486,7 @@ def test_renderer_marker_remains_candidate_tier_without_class_wrapper(
         probe_marker=marker,
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         invariant,
         (observation,),
         method=method_spec,

@@ -17,11 +17,7 @@ from cloud_dast.qdl.graph import (
     completed,
     transition,
 )
-from cloud_dast.verification.oracles import (
-    NormView,
-    PrimitiveOracleRouter,
-    SequenceOracle,
-)
+from cloud_dast.verification.oracles import NormView, primitive_router, sequence
 
 
 def _flow_invariant() -> InvariantProjection:
@@ -116,7 +112,7 @@ def _state_observation(
 def test_sequence_successes_do_not_prove_named_completion() -> None:
     trace = (_observation(1), _observation(2))
 
-    verdict = SequenceOracle().evaluate_policy(_flow_invariant(), trace)
+    verdict = sequence.Oracle().evaluate_policy(_flow_invariant(), trace)
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.deterministic is True
@@ -127,7 +123,7 @@ def test_sequence_successes_do_not_prove_named_completion() -> None:
 def test_sequence_denial_does_not_refute_named_completion() -> None:
     trace = (_observation(1), _observation(2, outcome=AccessOutcome.DENIED))
 
-    verdict = SequenceOracle().evaluate_policy(_flow_invariant(), trace)
+    verdict = sequence.Oracle().evaluate_policy(_flow_invariant(), trace)
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
@@ -140,7 +136,7 @@ def test_sequence_successes_after_denial_are_unscoreable() -> None:
         _observation(3),
     )
 
-    verdict = SequenceOracle().evaluate_policy(_flow_invariant(), trace)
+    verdict = sequence.Oracle().evaluate_policy(_flow_invariant(), trace)
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
@@ -155,7 +151,7 @@ def test_sequence_contiguity_is_not_flow_state_evidence() -> None:
         _observation(3),
     )
 
-    verdict = SequenceOracle().evaluate_policy(_flow_invariant(), trace)
+    verdict = sequence.Oracle().evaluate_policy(_flow_invariant(), trace)
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
@@ -163,7 +159,7 @@ def test_sequence_contiguity_is_not_flow_state_evidence() -> None:
 
 
 def test_sequence_oracle_is_unscoreable_without_observations() -> None:
-    verdict = SequenceOracle().evaluate_policy(_flow_invariant(), ())
+    verdict = sequence.Oracle().evaluate_policy(_flow_invariant(), ())
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
@@ -180,7 +176,7 @@ def test_transition_norm_compiles_as_sequence_primitive() -> None:
 
 
 def test_transition_oracle_fails_when_transition_is_completed() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (_state_observation(1, before="created", after="approved"),),
     )
@@ -193,7 +189,7 @@ def test_transition_oracle_fails_when_transition_is_completed() -> None:
 
 
 def test_transition_oracle_passes_when_transition_is_absent() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (_state_observation(1, before="created", after="shipped"),),
     )
@@ -204,7 +200,7 @@ def test_transition_oracle_passes_when_transition_is_absent() -> None:
 
 
 def test_transition_oracle_passes_when_transition_is_blocked() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(
@@ -228,7 +224,7 @@ def test_transition_oracle_passes_when_authentication_fails() -> None:
         after="approved",
     ).model_copy(update={"auth_failed": True})
 
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (observation,),
     )
@@ -239,7 +235,7 @@ def test_transition_oracle_passes_when_authentication_fails() -> None:
 
 
 def test_transition_oracle_is_unscoreable_without_state_evidence() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (_state_observation(1),),
     )
@@ -250,7 +246,7 @@ def test_transition_oracle_is_unscoreable_without_state_evidence() -> None:
 
 
 def test_transition_oracle_scores_explicit_readback_state_evidence() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(1, after="created", method_id="orders.Get"),
@@ -268,7 +264,7 @@ def test_transition_oracle_scores_explicit_readback_state_evidence() -> None:
 
 
 def test_transition_oracle_scores_concurrency_state_evidence() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(1, after="created", method_id="orders.Get"),
@@ -292,7 +288,7 @@ def test_transition_oracle_scores_concurrency_state_evidence() -> None:
 
 
 def test_transition_oracle_passes_when_paired_write_is_denied() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(1, after="created", method_id="orders.Get"),
@@ -313,7 +309,7 @@ def test_transition_oracle_passes_when_paired_write_is_denied() -> None:
 
 
 def test_transition_oracle_rejects_unpaired_action_retries() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(1, after="created"),
@@ -329,7 +325,7 @@ def test_transition_oracle_rejects_unpaired_action_retries() -> None:
 
 
 def test_transition_oracle_rejects_paired_reads_without_the_norm_action() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _transition_invariant(),
         (
             _state_observation(1, after="created", method_id="orders.Get"),
@@ -344,7 +340,7 @@ def test_transition_oracle_rejects_paired_reads_without_the_norm_action() -> Non
 
 
 def test_sequence_one_success_is_unscoreable() -> None:
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _flow_invariant(),
         (_observation(1),),
     )
@@ -367,7 +363,7 @@ def test_primitive_router_dispatches_sequence_norm(
     method_spec,
     scenario_position,
 ) -> None:
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         _flow_invariant(),
         (_observation(1), _observation(2)),
         method=method_spec,
@@ -389,7 +385,7 @@ def test_primitive_router_binds_transition_to_the_executed_method(
         method_id=method_spec.method_id,
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         _transition_invariant(),
         (observation,),
         method=method_spec,

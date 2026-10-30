@@ -11,13 +11,12 @@ from __future__ import annotations
 
 from cloud_dast.qdl.graph import (
     Atom,
-    Context,
     Fact,
-    Predicate,
     QdlGraph,
     differs,
 )
 from cloud_dast.verification.differential.report import DiffReport
+from cloud_dast.verification.evidence_facts import runtime_fact
 
 __all__ = ["project_diff"]
 
@@ -30,13 +29,13 @@ def project_diff(report: DiffReport) -> QdlGraph:
     treatment = _observation_atom(report.treatment_observation_id)
 
     facts: list[Fact] = [
-        _fact("is", (action, Atom(value="Action"))),
-        _fact("is", (control, Atom(value="Observation"))),
-        _fact("is", (treatment, Atom(value="Observation"))),
-        _fact("paired", (control, treatment)),
+        runtime_fact("is", (action, Atom(value="Action"))),
+        runtime_fact("is", (control, Atom(value="Observation"))),
+        runtime_fact("is", (treatment, Atom(value="Observation"))),
+        runtime_fact("paired", (control, treatment)),
     ]
     facts.extend(
-        _fact(
+        runtime_fact(
             "evidence",
             (treatment, differs(action, Atom(value=dimension))),
         )
@@ -61,11 +60,3 @@ def _observation_atom(observation_id: str) -> Atom:
         else f"observation:{observation_id}"
     )
     return Atom(value=value)
-
-
-def _fact(predicate: str, args: tuple[object, ...]) -> Fact:
-    return Fact(
-        context=Context.RUNTIME,
-        predicate=Predicate.from_name(predicate),
-        args=args,  # type: ignore[arg-type]
-    )

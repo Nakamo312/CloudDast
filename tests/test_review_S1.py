@@ -111,6 +111,7 @@ def test_policy_lookup_preserves_principal_action_and_resource_identity(tmp_path
 
 
 def test_positive_and_unknown_policy_have_distinct_oracle_grounding(tmp_path):
+    import cloud_dast.verification.oracles.grounded
     from cloud_dast.model import (
         AccessOutcome,
         Observation,
@@ -118,7 +119,6 @@ def test_positive_and_unknown_policy_have_distinct_oracle_grounding(tmp_path):
         VerdictStatus,
     )
     from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, denied
-    from cloud_dast.verification.oracles import GroundedOutcomeOracle
 
     repo = repository(
         tmp_path, permissions=[dict(subject="alice", action=ACTION, resource="item-1")]
@@ -137,7 +137,7 @@ def test_positive_and_unknown_policy_have_distinct_oracle_grounding(tmp_path):
             ),
         ),
     )
-    oracle = GroundedOutcomeOracle()
+    oracle = cloud_dast.verification.oracles.grounded.Oracle()
     for resource, grounded in (("item-1", True), ("item-2", False)):
         scenario = repo.get_scenario("alice", resource, METHOD)
         observation = Observation(
@@ -188,6 +188,7 @@ def test_policy_solver_failure_never_becomes_known_deny(tmp_path, monkeypatch):
 
 
 def test_complete_scope_grounds_foreign_resource_as_denied(tmp_path):
+    import cloud_dast.verification.oracles.grounded
     from cloud_dast.model import (
         AccessOutcome,
         Observation,
@@ -196,7 +197,6 @@ def test_complete_scope_grounds_foreign_resource_as_denied(tmp_path):
     )
     from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
     from cloud_dast.verification.norms import NormView
-    from cloud_dast.verification.oracles import GroundedOutcomeOracle
 
     repo = repository(
         tmp_path,
@@ -226,8 +226,10 @@ def test_complete_scope_grounds_foreign_resource_as_denied(tmp_path):
         ),
     )
     norm = NormView.from_invariant(invariant)
-    expected, grounded, _ = GroundedOutcomeOracle._expected_outcome(
-        norm, METHOD, foreign
+    expected, grounded, _ = (
+        cloud_dast.verification.oracles.grounded.Oracle._expected_outcome(
+            norm, METHOD, foreign
+        )
     )
     assert expected is AccessOutcome.DENIED
     assert grounded
@@ -237,7 +239,7 @@ def test_complete_scope_grounds_foreign_resource_as_denied(tmp_path):
         observed_outcome=AccessOutcome.ALLOWED,
         response_summary="OK",
     )
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant, observation, METHOD, foreign
     )
     assert verdict.status is VerdictStatus.FAIL

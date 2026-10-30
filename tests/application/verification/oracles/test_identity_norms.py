@@ -18,14 +18,9 @@ from cloud_dast.qdl.graph import (
     identity,
 )
 from cloud_dast.verification.norms import NormView
+from cloud_dast.verification.oracles import grounded, primitive_router
 from cloud_dast.verification.oracles.action_alignment import (
     ACTION_MISMATCH_RATIONALE,
-)
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
 )
 
 
@@ -103,7 +98,7 @@ def test_identity_norm_conflicting_with_iam_remains_a_scoreable_lead(
 
     assert norm is not None
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = grounded.Oracle().evaluate_outcome(
         _identity_invariant(),
         observation,
         method_spec,
@@ -161,8 +156,8 @@ class _UnusedDifferentialOracle:
         raise AssertionError("identity norms must not dispatch to differential oracle")
 
 
-def _router() -> PrimitiveOracleRouter:
-    return PrimitiveOracleRouter(differential_oracle=_UnusedDifferentialOracle())
+def _router() -> primitive_router.Oracle:
+    return primitive_router.Oracle(differential_oracle=_UnusedDifferentialOracle())
 
 
 def _invariant(effect) -> InvariantProjection:

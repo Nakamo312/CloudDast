@@ -36,10 +36,8 @@ from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
-from cloud_dast.verification.oracles.latency import (
-    LatencyOracle,
-    collect_delivered_durations,
-)
+from cloud_dast.verification.oracles import latency
+from cloud_dast.verification.oracles.latency import collect_delivered_durations
 
 
 class ExplodingGrounding:
@@ -113,7 +111,7 @@ def _latency_invariant(method_id: str = "orders.Get") -> InvariantProjection:
     )
 
 
-def _workflow(oracle: LatencyOracle) -> LiveWorkflow:
+def _workflow(oracle: latency.Oracle) -> LiveWorkflow:
     return assemble_workflow(
         grounding=ExplodingGrounding(),
         scenario_binder=None,
@@ -156,7 +154,7 @@ def _latency_execution_path(
 
 
 def test_latency_oracle_updates_runtime_baseline_from_durations() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
 
     oracle.update_baseline("action:orders.Get", (100.0, 102.0))
     assert "action:orders.Get" not in oracle.baselines
@@ -172,7 +170,7 @@ def test_latency_oracle_updates_runtime_baseline_from_durations() -> None:
 
 
 def test_missing_baseline_creates_runtime_baseline_without_llm_call() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend(
@@ -195,7 +193,7 @@ def test_missing_baseline_creates_runtime_baseline_without_llm_call() -> None:
 
 
 def test_missing_baseline_waits_for_three_duration_samples() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend(
@@ -223,7 +221,7 @@ def test_runtime_baseline_updates_and_releases_prewarmed_duration_path(
     verification_plan,
     scenario_position,
 ) -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     path = _latency_execution_path(
         method_spec,
@@ -258,7 +256,7 @@ def test_latency_bootstrap_builds_initial_baseline_from_one_observation(
     verification_plan,
     scenario_position,
 ) -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     first = _latency_execution_path(
         method_spec,
@@ -327,7 +325,7 @@ def test_collect_delivered_durations_ignores_transport_errors() -> None:
 
 
 def test_latency_oracle_marks_transport_error_unscoreable() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     oracle.update_baseline("action:orders.Get", (100.0, 102.0, 104.0))
     observation = _observation(
         5,
@@ -344,7 +342,7 @@ def test_latency_oracle_marks_transport_error_unscoreable() -> None:
 
 
 def test_latency_baseline_uses_only_delivered_observations() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend(
@@ -374,7 +372,7 @@ def test_latency_baseline_uses_only_delivered_observations() -> None:
 
 
 def test_runtime_baseline_includes_delivered_error_response() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend(
@@ -411,7 +409,7 @@ def test_runtime_baseline_includes_delivered_error_response() -> None:
 
 
 def test_runtime_baseline_excludes_explicit_timeout() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend(

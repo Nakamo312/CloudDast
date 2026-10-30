@@ -39,8 +39,7 @@ from cloud_dast.runtime.observation_recording import Coordinator
 from cloud_dast.runtime.readback_reevaluation import Reevaluation
 from cloud_dast.verification.evaluation import ObservationEvaluator
 from cloud_dast.verification.norms import NormCompiler
-from cloud_dast.verification.oracles.grounded import GroundedOutcomeOracle
-from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
+from cloud_dast.verification.oracles import grounded, primitive_router
 from cloud_dast.verification.projection import ObservationProjector
 
 
@@ -48,8 +47,8 @@ from cloud_dast.verification.projection import ObservationProjector
 class BoundPathRunnerOptions:
     """Optional adapters used by the live path execution owner."""
 
-    grounded_oracle: GroundedOutcomeOracle | None = None
-    primitive_oracle: PrimitiveOracleRouter | None = None
+    grounded_oracle: grounded.Oracle | None = None
+    primitive_oracle: primitive_router.Oracle | None = None
     formal_repository: FormalRepository | None = None
     observation_projector: ObservationProjector | None = None
     fuzz_session_factory: FuzzSessionFactory | None = None
@@ -86,7 +85,7 @@ def assemble_runner(
     settings = BoundPathRunnerOptions.from_legacy(options, legacy_options)
     event_bus = events.publisher
     execute_call = partial(execute_call_fn, checker, event_bus)
-    primitive_oracle = settings.primitive_oracle or PrimitiveOracleRouter(
+    primitive_oracle = settings.primitive_oracle or primitive_router.Oracle(
         grounded_oracle=settings.grounded_oracle
     )
     compiler = NormCompiler()

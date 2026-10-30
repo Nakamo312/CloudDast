@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import cloud_dast.verification.oracles.marker
 from cloud_dast.config import OOB_PROBE_TIMEOUT_SECONDS
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
@@ -18,13 +19,7 @@ from cloud_dast.model import (
 )
 from cloud_dast.ports import EvidenceEvent
 from cloud_dast.runtime import oob
-from cloud_dast.verification.oracles import (
-    FieldExposureOracle,
-    LatencyBaseline,
-    LatencyOracle,
-    MarkerOracle,
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import field_exposure, latency, primitive_router
 from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.latency import AvailabilityOracle
 
@@ -144,7 +139,7 @@ def test_field_exposure_detects_forbidden_response_field(
         output=ResponseData(fields=(("private_key", "PEM"), ("id", "secret-1")))
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         scenario=_attacker_scenario(scenario_position),
@@ -166,7 +161,7 @@ def test_field_exposure_passes_when_forbidden_fields_are_absent(
         response_tree=(("id", "secret-1"),),
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         scenario=_attacker_scenario(scenario_position),
@@ -180,9 +175,9 @@ def test_latency_requires_runtime_baseline() -> None:
     effect = duration(Atom(value="action:get-secret"), Atom(value=110))
     observation = _observation(duration_ms=111.0)
 
-    no_baseline = LatencyOracle().evaluate_policy(_invariant(effect), (observation,))
-    with_baseline = LatencyOracle(
-        {"get-secret": LatencyBaseline.from_durations("get-secret", (100, 100, 100))}
+    no_baseline = latency.Oracle().evaluate_policy(_invariant(effect), (observation,))
+    with_baseline = latency.Oracle(
+        {"get-secret": latency.Baseline.from_durations("get-secret", (100, 100, 100))}
     ).evaluate_policy(_invariant(effect), (observation,))
 
     assert no_baseline.status is VerdictStatus.UNSCOREABLE
@@ -194,17 +189,17 @@ def test_latency_uses_runtime_baseline_threshold() -> None:
     loose_norm = duration(Atom(value="action:get-secret"), Atom(value=200))
     tight_norm = duration(Atom(value="action:get-secret"), Atom(value=110))
     observation = _observation(duration_ms=111.0)
-    tight_baseline = LatencyOracle(
+    tight_baseline = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (100.0, 100.0, 100.0),
             )
         }
     )
-    loose_baseline = LatencyOracle(
+    loose_baseline = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (200.0, 200.0, 200.0),
             )
@@ -228,14 +223,14 @@ def test_latency_uses_runtime_baseline_threshold() -> None:
 
 def test_latency_scores_worst_case_duration_in_trace() -> None:
     effect = duration(Atom(value="action:orders.Get"), Atom(value=200))
-    baseline = LatencyBaseline(
+    baseline = latency.Baseline(
         method_id="orders.Get",
         median_ms=2.0,
         mad_ms=0.0,
         threshold_ms=3.9,
         samples=3,
     )
-    oracle = LatencyOracle({"orders.Get": baseline})
+    oracle = latency.Oracle({"orders.Get": baseline})
     observations = (
         _observation(duration_ms=2.0),
         _observation(duration_ms=154.0),
@@ -259,7 +254,7 @@ def test_latency_scores_worst_case_duration_in_trace() -> None:
 
 def test_paired_latency_scores_worst_case_duration_in_trace() -> None:
     effect = duration(Atom(value="action:orders.Get"), Atom(value=110))
-    baseline = LatencyBaseline(
+    baseline = latency.Baseline(
         method_id="orders.Get",
         median_ms=0.0,
         mad_ms=0.0,
@@ -267,7 +262,7 @@ def test_paired_latency_scores_worst_case_duration_in_trace() -> None:
         samples=3,
         paired=True,
     )
-    oracle = LatencyOracle({"orders.Get": baseline})
+    oracle = latency.Oracle({"orders.Get": baseline})
     observations = (
         _observation(duration_ms=2.0),
         _observation(duration_ms=154.0),
@@ -290,9 +285,9 @@ def test_latency_scores_delivered_error_response() -> None:
         duration_ms=111.0,
         response_tree=(("error", "unavailable"),),
     )
-    oracle = LatencyOracle(
+    oracle = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (100.0, 100.0, 100.0),
             )
@@ -387,9 +382,9 @@ def test_latency_delegates_explicit_timeout_to_availability_oracle() -> None:
         duration_ms=111.0,
         error_reason="connection timed out",
     )
-    oracle = LatencyOracle(
+    oracle = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (100.0, 100.0, 100.0),
             )
@@ -411,9 +406,9 @@ def test_delivered_gateway_timeout_remains_latency_evidence() -> None:
         error_reason="Gateway Timeout",
         response_tree=(("message", "upstream unavailable"),),
     )
-    oracle = LatencyOracle(
+    oracle = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (100.0, 100.0, 100.0),
             )
@@ -427,7 +422,7 @@ def test_delivered_gateway_timeout_remains_latency_evidence() -> None:
 
 
 def test_latency_oracle_exposes_baseline_availability() -> None:
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
 
     assert oracle.has_baseline("action:get-secret") is False
 
@@ -447,7 +442,7 @@ def test_marker_reflection_and_absence_do_not_prove_sink() -> None:
         probe_marker="dast-marker-42",
     )
 
-    oracle = MarkerOracle()
+    oracle = cloud_dast.verification.oracles.marker.Oracle()
 
     assert oracle.evaluate_policy(
         _invariant(effect),
@@ -468,7 +463,7 @@ def test_marker_absence_without_complete_response_scope_is_unscoreable() -> None
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -488,7 +483,7 @@ def test_marker_uses_candidate_probe_marker() -> None:
         probe_marker="dast-marker-42-check-1",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -509,7 +504,7 @@ def test_marker_rejects_unattributed_norm_marker_fallback(
         probe_marker=probe_marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -531,7 +526,7 @@ def test_marker_nested_debug_reflection_is_unscoreable() -> None:
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -560,7 +555,7 @@ def test_marker_ignores_resource_not_found_echo(error_reason: str) -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -582,7 +577,7 @@ def test_marker_structured_error_name_does_not_prove_sink() -> None:
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -602,7 +597,7 @@ def test_marker_diagnostic_without_sink_trace_is_unscoreable() -> None:
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -620,7 +615,7 @@ def test_marker_ignores_successful_unstructured_summary_echo() -> None:
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -638,7 +633,7 @@ def test_marker_ignores_non_string_tree_leaves() -> None:
         probe_marker="dast-marker-42",
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -801,7 +796,7 @@ def test_primitive_router_dispatches_marker_norm(
         probe_marker="dast-marker-42",
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         method=method_spec,
@@ -824,7 +819,7 @@ def test_primitive_router_without_norm_fact_is_unscoreable(
         severity=Severity.HIGH,
     )
 
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         invariant,
         (_observation(),),
         method=method_spec,

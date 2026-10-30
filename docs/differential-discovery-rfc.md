@@ -30,7 +30,7 @@
   адаптеры его заполняют.
 - Не вводим LLM-судью и не отдаём модели сырой транспортный blob. Полное
   наблюдение попадает в модель только как bounded structured `EvidenceView`.
-- `DifferentialOracle` — verdict-слой для уже измеренного read-back; он не
+- `differential.Oracle` — verdict-слой для уже измеренного read-back; он не
   создаёт новый comparator и не исполняет повторные запросы.
 - Не расширяем словарь ролей и не трогаем Σ.
 
@@ -50,9 +50,9 @@
 
 ### 4.1 Паринг (Phase D2)
 
-- `DifferentialSpec` в `live_contracts.py`: control/treatment
+- `contracts.Spec` в `verification/differential/contracts.py`: control/treatment
   `ScenarioPosition`, различие ровно в одном факторе
-  (сравнение факторов выполняется внутри `DifferentialSpec`, без
+  (сравнение факторов выполняется внутри `contracts.Spec`, без
   группировочного ключа доменной модели).
 - `BoundPathRunner._execute_step_pair(...)` рядом с `_execute_step`
   (`path_runner.py:456-470`): обе ноги через `ScenarioChecker`, с изоляцией
@@ -123,7 +123,7 @@
 | Фаза | Содержимое | Приёмка |
 |---|---|---|
 | **D1 сигнал** | `GrpcResult.error_reason` + захват `exc.details()` (cap 512); `ResponseData.field_names` (shape без значений, включая вложенные); `Observation.error_reason`; projector эмитит `error(action, reason)` и `field(action, name)` для shape | SQLi-маркер из `error_message` виден в `Observation` через реальный bench gRPC-сервер (`benchmarks/nsfy_bench/server.py:123` кладёт summary в `context.abort`) |
-| **D2 паринг** | `DifferentialSpec`, `_execute_step_pair`, изоляция outputs, фикс fuzz-сигнатуры | пара Observations для `export_data`: attacker vs victim, один запрос |
+| **D2 паринг** | `contracts.Spec`, `_execute_step_pair`, изоляция outputs, фикс fuzz-сигнатуры | пара Observations для `export_data`: attacker vs victim, один запрос |
 | **D3 формализация** | `differs`/`paired` в словаре, компаратор + `DiffReport`, проекция runtime-фактов, `unexplained_variance` + variance-ось + `ground_variance` | из пары наблюдений создаётся deficit; fake-model возвращает валидную норму; `score_grounding` меряет качество |
 | **D4 цикл** | wiring компаратора в pair-flow, persistence `diff:*`, чтение в binder, e2e-тест | **authz-export-other найден без заранее данной нормы** (`app.py:879-893`); второй прогон переиспользует норму; scorer: recall ↑, false_positives = 0 на контроле |
 
@@ -198,7 +198,7 @@ Observation.response_tree
 
 | Режим | Что варьируется | Какие классы ловит |
 |---|---|---|
-| факторные пары | любой из 6 факторов `ScenarioProfile` (уже в `DifferentialSpec`) | access control, BOLA, disclosure |
+| факторные пары | любой из 6 факторов `ScenarioProfile` (уже в `contracts.Spec`) | access control, BOLA, disclosure |
 | payload-пары | тот же сценарий, мутированный запрос | injection, error-handling, парсинг |
 | before/after read-back | пишем → читаем, дифф состояния | tampering, mass assignment, state machine |
 | timing-пары | классы латентности | blind injection, user enumeration |
@@ -253,7 +253,7 @@ permission gap          -> allowed(action)
 теперь выбирает effect по доступной evidence и не делает fallback на
 `allowed(action)`.
 
-`DifferentialOracle` замыкает read-back цикл: promoted `changed`-норма
+`differential.Oracle` замыкает read-back цикл: promoted `changed`-норма
 получает PASS/FAIL/UNSCOREABLE по паре read-before/read-after, а finding
 по-прежнему возможен только при deterministic grounded FAIL.
 

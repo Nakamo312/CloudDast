@@ -29,9 +29,7 @@ from cloud_dast.model.events import DomainEvent
 from cloud_dast.runtime.budget import CallLimits
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
-from cloud_dast.verification.differential.contracts import (
-    DifferentialSpec,
-)
+from cloud_dast.verification.differential import contracts
 from cloud_dast_fuzzing import TemplateGenerator
 from tests.support.guardrails import AllowAllGuardrail
 
@@ -125,7 +123,7 @@ def test_execute_step_pair_runs_isolated_export_data_legs() -> None:
     control_check, treatment_check, control_obs, treatment_obs = (
         runner.differential.execute_step_pair(
             step,
-            DifferentialSpec(control, treatment),
+            contracts.Spec(control, treatment),
             budget,
         )
     )

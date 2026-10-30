@@ -24,7 +24,7 @@ from cloud_dast.model import (
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
 from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.runner import EventProjection
-from cloud_dast.verification.oracles import PrimitiveOracleRouter
+from cloud_dast.verification.oracles import primitive_router
 
 ACTION = "grpc:svc.Get"
 METHOD = MethodSpec(
@@ -143,7 +143,7 @@ def test_actual_resource_binding_preserves_scoped_policy(
         observed_outcome=AccessOutcome.ALLOWED,
         response_summary="OK",
     )
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         NORM, (observation,), method=METHOD, scenario=scenario
     )
     assert verdict.grounded is bool(findings)
@@ -213,7 +213,7 @@ def test_actual_resource_binding_cannot_inherit_another_resources_deny(tmp_path)
         observed_outcome=AccessOutcome.ALLOWED,
         response_summary="OK",
     )
-    verdict = PrimitiveOracleRouter().evaluate_policy(
+    verdict = primitive_router.Oracle().evaluate_policy(
         NORM,
         (observation,),
         method=METHOD,

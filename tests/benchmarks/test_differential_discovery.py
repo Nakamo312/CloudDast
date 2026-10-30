@@ -64,12 +64,7 @@ from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.differential.comparator import (
     compare_observations,
 )
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import grounded, primitive_router
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_llm.axis_grounding import Dispatcher
 from cloud_dast_llm.consultation import ConsultationDispatcher
@@ -364,8 +359,8 @@ def _build_campaign(*, diff_mode: bool):
     runner = assemble_runner(
         service_workflow,
         event_projection,
-        grounded_oracle=GroundedOutcomeOracle(),
-        primitive_oracle=PrimitiveOracleRouter(),
+        grounded_oracle=grounded.Oracle(),
+        primitive_oracle=primitive_router.Oracle(),
         formal_repository=repository,
     )
     scenario_repo = ScenarioRepo()
@@ -624,7 +619,7 @@ def test_differential_discovery_promotes_norm_and_finds_export() -> None:
     assert control_checks
     control_observation = service_workflow.execute_check(control_checks[0])
     assert control_observation is not None
-    control_verdict = PrimitiveOracleRouter().evaluate_policy(
+    control_verdict = primitive_router.Oracle().evaluate_policy(
         diff_invariant,
         (control_observation,),
         method=export_method,

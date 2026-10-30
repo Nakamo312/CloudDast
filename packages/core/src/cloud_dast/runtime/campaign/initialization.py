@@ -36,7 +36,7 @@ from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.recovery import Coordinator
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.coverage import Builder
-from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles import latency
 
 logger = logging.getLogger("cloud_dast.runtime.campaign.initialization")
 
@@ -54,7 +54,7 @@ class BootstrapDeps:
     reactive: BatchFlow | None = None
     grounding_runner: GroundingRunner | None = None
     reactive_budget: int | None = 8
-    latency_oracle: LatencyOracle | None = None
+    latency_oracle: latency.Oracle | None = None
     diff_mode: bool = False
     report_publisher: ReportPublisher | None = None
     event_bus: EventPublisher | None = None

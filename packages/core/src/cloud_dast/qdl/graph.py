@@ -355,6 +355,14 @@ def canonical_json(value: BaseModel | Sequence[BaseModel]) -> str:
     )
 
 
+def term_label(term: Term) -> str:
+    """Render a graph-view label, distinct from canonical term identity."""
+
+    if isinstance(term, Atom):
+        return str(term.value)
+    return canonical_json(term)
+
+
 def hash_content(value: BaseModel | Sequence[BaseModel]) -> str:
     """Return a stable SHA-256 hash of canonical QDL content."""
 
@@ -529,6 +537,7 @@ __all__ = [
     "allowed",
     "callback",
     "canonical_json",
+    "term_label",
     "changed",
     "completed",
     "create",

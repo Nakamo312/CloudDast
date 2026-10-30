@@ -5,7 +5,6 @@ from cloud_dast.verification.differential.comparator import (
 )
 from cloud_dast.verification.differential.contracts import (
     ConcurrencyResult,
-    DifferentialSpec,
     IsolatedStandPolicy,
     PayloadPairSpec,
     ReadBackResult,
@@ -40,7 +39,6 @@ __all__ = [
     "CONCURRENCY_PROBES",
     "DIFF_MODES",
     "DiffMode",
-    "DifferentialSpec",
     "ConcurrencyResult",
     "IsolatedStandPolicy",
     "MUTABLE_INPUT_ROLE",

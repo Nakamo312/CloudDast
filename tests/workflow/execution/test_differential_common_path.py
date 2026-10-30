@@ -38,10 +38,8 @@ from cloud_dast.runtime.execution.scenarios import (
 )
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
-from cloud_dast.verification.differential.contracts import (
-    DifferentialSpec,
-    ReadBackSpec,
-)
+from cloud_dast.verification.differential import contracts
+from cloud_dast.verification.differential.contracts import ReadBackSpec
 from cloud_dast.verification.differential.modes import CONCURRENCY_PROBES
 from cloud_dast_fuzzing import TemplateGenerator
 from tests.support.guardrails import AllowAllGuardrail
@@ -134,7 +132,7 @@ def test_factor_pair_uses_the_shared_budget(
             ),
         }
     )
-    spec = DifferentialSpec(control=owner, treatment=scenario_position)
+    spec = contracts.Spec(control=owner, treatment=scenario_position)
     budget = CallLimits(2)
     budget.begin_differential_round()
 
@@ -185,7 +183,7 @@ def test_factor_pair_does_not_spend_an_incomplete_pair(
             ),
         }
     )
-    spec = DifferentialSpec(control=owner, treatment=scenario_position)
+    spec = contracts.Spec(control=owner, treatment=scenario_position)
     budget = CallLimits(1)
     budget.begin_differential_round()
 
@@ -285,6 +283,7 @@ def test_readback_pair_uses_the_shared_budget(
         write_method=write_method,
         read_method=read_method,
         resource_binding="secret_id",
+        mutable_fields=("note",),
         read_resource_types=(("secret_id", "lockbox.secret"),),
     )
     budget = CallLimits(3)
@@ -578,7 +577,7 @@ def test_pair_failure_preserves_budget_and_partial_evidence(
             step,
             None
             if payload
-            else DifferentialSpec(control=owner, treatment=scenario_position),
+            else contracts.Spec(control=owner, treatment=scenario_position),
             budget,
             **options,
         )

@@ -25,10 +25,7 @@ from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
-from cloud_dast.verification.oracles import (
-    GroundedOutcomeOracle,
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import grounded, primitive_router
 from cloud_dast_fuzzing import TemplateGenerator
 from tests.support.guardrails import AllowAllGuardrail
 
@@ -150,8 +147,8 @@ def test_live_workflow_records_all_campaign_phases(
         assemble_runner(
             service,
             event_projection,
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         ),
         FindingEvaluator(event_projection),

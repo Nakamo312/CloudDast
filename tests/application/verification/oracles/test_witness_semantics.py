@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+import cloud_dast.verification.oracles.marker
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
@@ -30,11 +31,10 @@ from cloud_dast.qdl.graph import (
     reached,
 )
 from cloud_dast.verification.oracles import (
-    FieldExposureOracle,
-    GroundedOutcomeOracle,
-    MarkerOracle,
-    SequenceOracle,
     WitnessRolePolicy,
+    field_exposure,
+    grounded,
+    sequence,
 )
 
 
@@ -106,7 +106,7 @@ def test_response_reflection_is_not_a_sink_witness() -> None:
         marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _marker_norm(marker),
         (observation,),
         method_id="render",
@@ -126,7 +126,7 @@ def test_complete_response_is_not_complete_sink_scope() -> None:
         marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _marker_norm(marker),
         (observation,),
         method_id="render",
@@ -144,7 +144,7 @@ def test_complete_response_is_not_complete_sink_scope() -> None:
 def test_incomplete_negative_channel_maps_to_unscoreable() -> None:
     observation = _observation(output=ResponseData(fields=(("id", "safe"),)))
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario("attacker"),
@@ -164,7 +164,7 @@ def test_marker_absence_without_complete_negative_scope_is_unscoreable() -> None
         marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _marker_norm(marker),
         (observation,),
         method_id="render",
@@ -182,7 +182,7 @@ def test_marker_absence_without_complete_negative_scope_is_unscoreable() -> None
 def test_field_exposure_principal_mismatch_is_unscoreable() -> None:
     observation = _observation(response_tree=(("private_key", "PEM"),))
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario("victim"),
@@ -205,7 +205,7 @@ def test_unknown_composition_does_not_become_pass() -> None:
         response_summary="allowed",
     )
 
-    verdict = SequenceOracle().evaluate_policy(
+    verdict = sequence.Oracle().evaluate_policy(
         _invariant(completed(Atom(value="flow:forbidden"))),
         (observation,),
     )
@@ -231,7 +231,7 @@ def test_ungrounded_expectation_does_not_become_pass(
         allowed(Atom(value=f"action:{method_spec.method_id}")),
     )
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = grounded.Oracle().evaluate_outcome(
         invariant,
         denied_observation,
         method_spec,
@@ -253,7 +253,9 @@ def test_candidate_sink_role_comes_from_witness_policy() -> None:
         marker=marker,
     )
 
-    verdict = MarkerOracle(witness_policy=policy).evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle(
+        witness_policy=policy
+    ).evaluate_policy(
         _marker_norm(marker),
         (observation,),
         method_id="render",

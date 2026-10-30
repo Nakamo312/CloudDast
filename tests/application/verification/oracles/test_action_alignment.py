@@ -31,17 +31,16 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
-    FieldExposureOracle,
-    LatencyBaseline,
-    LatencyOracle,
-    PrimitiveOracleRouter,
+    field_exposure,
+    latency,
+    primitive_router,
+    witness,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.action_alignment import (
     ACTION_MISMATCH_RATIONALE,
     actions_align,
 )
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 
 
 class _ReadyEventStore:
@@ -161,7 +160,7 @@ def test_field_exposure_keeps_principal_scope_with_method_alignment(
         response_summary="OK",
         response_tree=(("private_key", "PEM"),),
     )
-    oracle = FieldExposureOracle()
+    oracle = field_exposure.Oracle()
 
     scoped = oracle.evaluate_policy(
         _invariant(effect),
@@ -186,25 +185,25 @@ def test_field_exposure_keeps_principal_scope_with_method_alignment(
 def _action_bound_case(
     primitive: str,
     method: MethodSpec,
-) -> tuple[Struct, Observation, PrimitiveOracleRouter]:
+) -> tuple[Struct, Observation, primitive_router.Oracle]:
     action = Atom(value=f"action:{method.method_id}")
     if primitive == "outcome":
         return (
             allowed(action),
             _observation(),
-            PrimitiveOracleRouter(),
+            primitive_router.Oracle(),
         )
     if primitive == "latency_bound":
-        baseline = LatencyBaseline.from_durations(
+        baseline = latency.Baseline.from_durations(
             method.method_id,
             (100.0, 100.0, 100.0),
         )
         return (
             duration(action, Atom(value=110)),
             _observation(duration_ms=111.0),
-            PrimitiveOracleRouter(
-                witness_oracle=WitnessSignalOracle(
-                    latency_oracle=LatencyOracle({method.method_id: baseline})
+            primitive_router.Oracle(
+                witness_oracle=witness.Oracle(
+                    latency_oracle=latency.Oracle({method.method_id: baseline})
                 )
             ),
         )
@@ -229,7 +228,7 @@ def _action_bound_case(
         return (
             reached(action, Atom(value="dast-marker-42")),
             observation,
-            PrimitiveOracleRouter(),
+            primitive_router.Oracle(),
         )
     if primitive == "oob_event":
         event = EvidenceEvent(
@@ -241,9 +240,7 @@ def _action_bound_case(
         return (
             external_call(action, Atom(value="dast-oob-marker")),
             _observation(probe_marker="dast-oob-marker"),
-            PrimitiveOracleRouter(
-                witness_oracle=WitnessSignalOracle(oob_oracle=oracle)
-            ),
+            primitive_router.Oracle(witness_oracle=witness.Oracle(oob_oracle=oracle)),
         )
     raise ValueError(f"unsupported primitive {primitive!r}")
 

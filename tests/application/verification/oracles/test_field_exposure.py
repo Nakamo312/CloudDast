@@ -18,7 +18,7 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, field, has
-from cloud_dast.verification.oracles import FieldExposureOracle
+from cloud_dast.verification.oracles import field_exposure
 
 
 def _invariant(effect) -> InvariantProjection:
@@ -85,7 +85,7 @@ def test_field_exposure_uses_full_tree_outside_safe_projection() -> None:
         response_tree=(("metadata.private_key", "PEM"),),
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario(("attacker",)),
@@ -103,7 +103,7 @@ def test_field_exposure_matches_nested_and_repeated_response_paths() -> None:
         )
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario(("attacker",)),
@@ -123,7 +123,7 @@ def test_field_exposure_matches_dotted_norm_field_by_path_suffix() -> None:
     )
     observation = _observation(response_tree=(("wrapper.payload.private_key", "PEM"),))
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         scenario=_scenario(("attacker",)),
@@ -138,7 +138,7 @@ def test_field_exposure_passes_when_full_tree_has_no_forbidden_field() -> None:
         response_tree=(("metadata.public_key", "public"),),
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario(("attacker",)),
@@ -151,7 +151,7 @@ def test_field_exposure_keeps_possession_principal_scope() -> None:
     observation = _observation(
         response_tree=(("private_key", "PEM"),),
     )
-    oracle = FieldExposureOracle()
+    oracle = field_exposure.Oracle()
 
     scoped = oracle.evaluate_policy(
         _possession_norm(),
@@ -192,7 +192,7 @@ def test_field_exposure_rejects_incomplete_response(
         ),
     )
 
-    verdict = FieldExposureOracle().evaluate_policy(
+    verdict = field_exposure.Oracle().evaluate_policy(
         _possession_norm(),
         (observation,),
         scenario=_scenario(("attacker",)),

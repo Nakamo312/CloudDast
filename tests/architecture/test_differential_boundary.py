@@ -785,15 +785,10 @@ def test_witness_signals_are_core_owned_and_history_uses_the_public_contract() -
 
 
 def test_deterministic_oracles_are_verification_owned() -> None:
-    from cloud_dast.verification.oracles import (
-        GroundedOutcomeOracle,
-        PrimitiveOracleRouter,
-    )
+    from cloud_dast.verification.oracles import grounded, primitive_router
 
-    assert GroundedOutcomeOracle.__module__ == (
-        "cloud_dast.verification.oracles.grounded"
-    )
-    assert PrimitiveOracleRouter.__module__ == (
+    assert grounded.Oracle.__module__ == ("cloud_dast.verification.oracles.grounded")
+    assert primitive_router.Oracle.__module__ == (
         "cloud_dast.verification.oracles.primitive_router"
     )
     legacy = SOURCE_ROOT / "application/verification/oracles"
@@ -1747,11 +1742,9 @@ def test_causal_paths_have_no_parallel_setup_executor() -> None:
 
 
 def test_observation_evaluation_is_verification_owned() -> None:
+    import cloud_dast.verification.differential.contracts
     from cloud_dast.runtime.execution import runner as execution
     from cloud_dast.verification import evaluation
-    from cloud_dast.verification.differential.contracts import (
-        DifferentialEvidenceView,
-    )
 
     assert evaluation.ObservationEvaluator.__module__ == (
         "cloud_dast.verification.evaluation"
@@ -1759,7 +1752,7 @@ def test_observation_evaluation_is_verification_owned() -> None:
     assert evaluation.ObservationEvaluation.__module__ == (
         "cloud_dast.verification.evaluation"
     )
-    assert DifferentialEvidenceView.__module__ == (
+    assert cloud_dast.verification.differential.contracts.EvidenceView.__module__ == (
         "cloud_dast.verification.differential.contracts"
     )
     evaluation_modules = _imported_modules(Path(evaluation.__file__))
@@ -2376,7 +2369,7 @@ def test_api_contracts_do_not_own_differential_decisions() -> None:
     from cloud_dast import api
 
     for symbol in (
-        "DifferentialSpec",
+        "Spec",
         "PayloadPairSpec",
         "ReadBackSpec",
         "ReadBackResult",

@@ -20,9 +20,10 @@ from cloud_dast.verification.oracles.action_alignment import (
 )
 from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.projection import ObservationProjector
+from cloud_dast.verification.witness import read_state
 
 
-class SequenceOracle:
+class Oracle:
     """Primitive P6: verify explicit state evidence for forbidden transitions.
 
     Successful calls alone cannot prove completion of a named flow.  The
@@ -80,7 +81,7 @@ class SequenceOracle:
             return self._unscoreable("transition QDL norm is not state-grounded")
 
         projector = ObservationProjector()
-        paired = _paired_transition(projector, trace, action_id)
+        paired = _paired_transition(trace, action_id)
         if paired is not None:
             before, after, completed, evidence_refs = paired
             return _transition_verdict(
@@ -193,7 +194,6 @@ def _projected_transition(
 
 
 def _paired_transition(
-    projector: ObservationProjector,
     trace: ObservationTrace,
     action_id: str | None,
 ) -> tuple[str, str, bool, tuple[str, ...]] | None:
@@ -229,8 +229,8 @@ def _paired_transition(
     ):
         return None
 
-    before = _projected_state(projector, read_before)
-    after = _projected_state(projector, read_after)
+    before = _projected_state(read_before)
+    after = _projected_state(read_after)
     if before is None or after is None:
         return None
     completed = any(
@@ -244,21 +244,13 @@ def _paired_transition(
     return before, after, completed, evidence_refs
 
 
-def _projected_state(
-    projector: ObservationProjector,
-    observation: Observation,
-) -> str | None:
+def _projected_state(observation: Observation) -> str | None:
     """Return the explicit after-state recorded for one observation."""
 
     step = _trace_step(observation, None)
     if step is None:
         return None
-    return _explicit_state(step.resource_state_after)
-
-
-def _explicit_state(fields: tuple[tuple[str, object], ...]) -> str | None:
-    values = [value for _, value in fields if isinstance(value, str) and value]
-    return values[0] if len(values) == 1 else None
+    return read_state(step.resource_state_after)
 
 
 def _transition_verdict(

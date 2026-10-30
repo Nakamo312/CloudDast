@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import cloud_dast.verification.oracles.marker
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
@@ -20,11 +21,7 @@ from cloud_dast.qdl.graph import (
     reached,
 )
 from cloud_dast.runtime import oob
-from cloud_dast.verification.oracles import (
-    LatencyBaseline,
-    LatencyOracle,
-    MarkerOracle,
-)
+from cloud_dast.verification.oracles import latency
 from cloud_dast.verification.oracles import oob as verification_oob
 
 
@@ -146,7 +143,7 @@ def test_marker_sink_type_and_field_do_not_prove_effect() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -166,7 +163,7 @@ def test_marker_request_echo_is_not_a_sink_witness() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -188,7 +185,7 @@ def test_marker_probe_field_without_sink_type_is_only_reflection() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -211,7 +208,7 @@ def test_marker_error_witness_requires_the_probe_sink_type() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -233,7 +230,9 @@ def test_marker_adversarial_target_requires_corroboration() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle(adversarial_target=True).evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle(
+        adversarial_target=True
+    ).evaluate_policy(
         _invariant(effect),
         (observation,),
         probe_fields=("template",),
@@ -247,11 +246,11 @@ def test_marker_adversarial_target_requires_corroboration() -> None:
 
 def test_paired_latency_baseline_requires_control_observation() -> None:
     effect = duration(Atom(value="action:get-secret"), Atom(value=100))
-    baseline = LatencyBaseline.from_paired_durations(
+    baseline = latency.Baseline.from_paired_durations(
         "get-secret",
         ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
     )
-    oracle = LatencyOracle({"get-secret": baseline})
+    oracle = latency.Oracle({"get-secret": baseline})
 
     verdict = oracle.evaluate_policy(
         _invariant(effect),
@@ -265,7 +264,7 @@ def test_paired_latency_baseline_requires_control_observation() -> None:
 
 def test_paired_latency_control_must_not_be_a_marker_probe() -> None:
     effect = duration(Atom(value="action:get-secret"), Atom(value=100))
-    baseline = LatencyBaseline.from_paired_durations(
+    baseline = latency.Baseline.from_paired_durations(
         "get-secret",
         ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
     )
@@ -274,7 +273,7 @@ def test_paired_latency_control_must_not_be_a_marker_probe() -> None:
         probe_marker="dast-latency-marker",
     )
     probe = _observation(duration_ms=106.0)
-    oracle = LatencyOracle({"get-secret": baseline})
+    oracle = latency.Oracle({"get-secret": baseline})
 
     verdict = oracle.evaluate_policy(
         _invariant(effect),
@@ -287,13 +286,13 @@ def test_paired_latency_control_must_not_be_a_marker_probe() -> None:
 
 def test_paired_latency_baseline_scores_control_and_probe_pair() -> None:
     effect = duration(Atom(value="action:get-secret"), Atom(value=100))
-    baseline = LatencyBaseline.from_paired_durations(
+    baseline = latency.Baseline.from_paired_durations(
         "get-secret",
         ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
     )
     control = _observation(duration_ms=100.0)
     probe = _observation(duration_ms=106.0)
-    oracle = LatencyOracle({"get-secret": baseline})
+    oracle = latency.Oracle({"get-secret": baseline})
 
     verdict = oracle.evaluate_policy(_invariant(effect), (control, probe))
 
@@ -306,18 +305,18 @@ def test_paired_latency_baseline_scores_control_and_probe_pair() -> None:
 def test_adversarial_latency_baseline_is_not_scoreable() -> None:
     effect = duration(Atom(value="action:get-secret"), Atom(value=100))
     observation = _observation(duration_ms=106.0)
-    inflated = LatencyOracle(
+    inflated = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (900.0, 900.0, 900.0),
             )
         },
         adversarial_target=True,
     )
-    deflated = LatencyOracle(
+    deflated = latency.Oracle(
         {
-            "get-secret": LatencyBaseline.from_durations(
+            "get-secret": latency.Baseline.from_durations(
                 "get-secret",
                 (1.0, 1.0, 1.0),
             )

@@ -15,8 +15,8 @@ from cloud_dast.runtime.differential.evidence import (
 )
 from cloud_dast.runtime.differential.results import PartialExecutionError
 from cloud_dast.runtime.execution.state import CampaignAccumulator
+from cloud_dast.verification.differential import contracts
 from cloud_dast.verification.differential.comparator import compare_timing_measurements
-from cloud_dast.verification.differential.contracts import DifferentialSpec
 from cloud_dast.verification.differential.modes import (
     TIMING_MIN_SAMPLES,
     TIMING_REPEATS,
@@ -119,7 +119,7 @@ class LatencyProbe:
         self,
         action: str,
         step: QdlExecutionStep,
-        spec: DifferentialSpec,
+        spec: contracts.Spec,
         budget: CallLimits,
         accumulator: CampaignAccumulator,
         *,
@@ -157,7 +157,7 @@ class LatencyProbe:
         self,
         action: str,
         step: QdlExecutionStep,
-        spec: DifferentialSpec,
+        spec: contracts.Spec,
         budget: CallLimits,
         accumulator: CampaignAccumulator,
         *,

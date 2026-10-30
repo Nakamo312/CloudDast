@@ -12,7 +12,7 @@ from cloud_dast.model import (
     ScopeRelation,
     StandState,
 )
-from cloud_dast.verification.differential.contracts import DifferentialSpec
+from cloud_dast.verification.differential import contracts
 
 
 def _with_profile(
@@ -42,7 +42,7 @@ def test_differential_spec_accepts_exactly_one_differing_factor(
 ) -> None:
     treatment = _with_profile(scenario_position, **{factor: value})
 
-    spec = DifferentialSpec(scenario_position, treatment)
+    spec = contracts.Spec(scenario_position, treatment)
 
     assert spec.factor == factor
     assert spec.control is scenario_position
@@ -69,7 +69,7 @@ def test_differential_spec_allows_identity_factor_with_different_stand(
         }
     )
 
-    spec = DifferentialSpec(scenario_position, treatment)
+    spec = contracts.Spec(scenario_position, treatment)
 
     assert spec.factor == "identity_class"
 
@@ -78,7 +78,7 @@ def test_differential_spec_rejects_equivalent_profiles(
     scenario_position: ScenarioPosition,
 ) -> None:
     with pytest.raises(ValueError, match="exactly one profile factor"):
-        DifferentialSpec(scenario_position, scenario_position.model_copy())
+        contracts.Spec(scenario_position, scenario_position.model_copy())
 
 
 def test_differential_spec_rejects_multiple_differing_factors(
@@ -91,4 +91,4 @@ def test_differential_spec_rejects_multiple_differing_factors(
     )
 
     with pytest.raises(ValueError, match="exactly one profile factor"):
-        DifferentialSpec(scenario_position, treatment)
+        contracts.Spec(scenario_position, treatment)

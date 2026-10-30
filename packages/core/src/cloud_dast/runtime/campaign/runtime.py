@@ -45,9 +45,7 @@ from cloud_dast.runtime.execution.runner import (
 )
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.replanning import Coordinator
-from cloud_dast.verification.oracles.latency import (
-    LatencyOracle,
-)
+from cloud_dast.verification.oracles import latency
 
 __all__ = [
     "BoundPathRunner",
@@ -67,7 +65,7 @@ class LiveWorkflowOptions:
 
     batch_timeout: float = 600.0
     reactive_budget: int | None = 8
-    latency_oracle: LatencyOracle | None = None
+    latency_oracle: latency.Oracle | None = None
     diff_mode: bool = False
     diff_modes: frozenset[str] | None = None
     scenario_repository: ScenarioRepository | None = None

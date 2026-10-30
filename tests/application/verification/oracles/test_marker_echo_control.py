@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import cloud_dast.verification.oracles.marker
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
@@ -12,7 +13,6 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, reached
-from cloud_dast.verification.oracles import MarkerOracle
 
 
 def _invariant(marker: str) -> InvariantProjection:
@@ -49,7 +49,7 @@ def test_marker_ignores_structured_field_name_echo() -> None:
     marker = "dast-marker"
     observation = _observation(marker, "ordinary")
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(marker),
         (observation,),
         probe_fields=("template",),
@@ -64,7 +64,7 @@ def test_marker_ignores_structured_field_value_echo() -> None:
     marker = "dast-marker"
     observation = _observation(marker, marker)
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(marker),
         (observation,),
         probe_fields=("template",),
@@ -80,7 +80,9 @@ def test_marker_without_grounded_probe_fields_is_unscoreable() -> None:
     marker = "dast-marker"
     observation = _observation(marker, marker)
 
-    verdict = MarkerOracle().evaluate_policy(_invariant(marker), (observation,))
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
+        _invariant(marker), (observation,)
+    )
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
@@ -99,7 +101,7 @@ def test_filesystem_404_diagnostic_without_sink_trace_is_unscoreable() -> None:
         probe_marker=marker,
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(marker),
         (observation,),
         probe_fields=("path",),
@@ -126,7 +128,7 @@ def test_marker_rejects_incomplete_response_evidence(channel: str) -> None:
         }
     )
 
-    verdict = MarkerOracle().evaluate_policy(
+    verdict = cloud_dast.verification.oracles.marker.Oracle().evaluate_policy(
         _invariant(marker),
         (observation,),
         probe_fields=("template",),

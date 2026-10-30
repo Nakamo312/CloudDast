@@ -15,7 +15,7 @@ from cloud_dast.verification.differential.report import (
     DiffReport,
     TimingEvidence,
 )
-from cloud_dast.verification.oracles.latency import LatencyBaseline
+from cloud_dast.verification.oracles import latency
 from cloud_dast.verification.witness import response_is_incomplete
 
 
@@ -88,12 +88,12 @@ def compare_timing_measurements(
         and len(treatment_durations) >= min_samples
     )
     if sufficient:
-        control_baseline = LatencyBaseline.from_durations(
+        control_baseline = latency.Baseline.from_durations(
             action_id,
             control_durations,
             min_samples=min_samples,
         )
-        treatment_baseline = LatencyBaseline.from_durations(
+        treatment_baseline = latency.Baseline.from_durations(
             action_id,
             treatment_durations,
             min_samples=min_samples,
@@ -233,8 +233,8 @@ def _representative(
 
 
 def _latency_class_differs(
-    control: LatencyBaseline,
-    treatment: LatencyBaseline,
+    control: latency.Baseline,
+    treatment: latency.Baseline,
     control_durations: Sequence[float],
     treatment_durations: Sequence[float],
 ) -> bool:
@@ -250,8 +250,8 @@ def _latency_class_differs(
 
 
 def _timing_evidence(
-    control: LatencyBaseline | None,
-    treatment: LatencyBaseline | None,
+    control: latency.Baseline | None,
+    treatment: latency.Baseline | None,
     control_samples: int,
     treatment_samples: int,
 ) -> TimingEvidence:

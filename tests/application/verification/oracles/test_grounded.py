@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import cloud_dast.verification.oracles.grounded
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     GrpcStatus,
@@ -15,7 +16,6 @@ from cloud_dast.qdl.graph import (
     Predicate,
     allowed,
 )
-from cloud_dast.verification.oracles import GroundedOutcomeOracle
 
 
 @pytest.mark.parametrize(
@@ -42,7 +42,7 @@ def test_permission_evidence_decides_grounding(
         }
     )
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         _invariant("permissions", method.method_id),
         allowed_observation,
         method,
@@ -60,7 +60,7 @@ def test_grounded_oracle_fails_when_missing_permission_is_allowed(
     allowed_observation,
 ) -> None:
     invariant = _invariant("inv", method_spec.method_id)
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         allowed_observation,
         method_spec,
@@ -78,7 +78,7 @@ def test_grounded_oracle_passes_when_missing_permission_is_denied(
     denied_observation,
 ) -> None:
     invariant = _invariant("inv", method_spec.method_id)
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         denied_observation,
         method_spec,
@@ -98,7 +98,7 @@ def test_grounded_oracle_marks_authentication_failure_unscoreable(
     invariant = _invariant("inv", method_spec.method_id)
     observation = denied_observation.model_copy(update={"auth_failed": True})
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         observation,
         method_spec,
@@ -120,7 +120,7 @@ def test_grounded_oracle_marks_grpc_unauthenticated_unscoreable(
         update={"transport_status": GrpcStatus(code="UNAUTHENTICATED")}
     )
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         observation,
         method_spec,
@@ -146,7 +146,7 @@ def test_grounded_oracle_requires_known_effective_permissions(
         }
     )
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         allowed_observation,
         method_spec,
@@ -166,7 +166,7 @@ def test_qdl_norm_without_graph_permissions_is_a_scoreable_lead(
     invariant = _invariant("hypothetical", method_spec.method_id)
     method = method_spec.model_copy(update={"permissions": frozenset()})
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         allowed_observation,
         method,
@@ -186,7 +186,7 @@ def test_grounded_oracle_rejects_action_mismatch(
 ) -> None:
     invariant = _invariant("mismatch", "grpc:another.Service.Method")
 
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = cloud_dast.verification.oracles.grounded.Oracle().evaluate_outcome(
         invariant,
         allowed_observation,
         method_spec,

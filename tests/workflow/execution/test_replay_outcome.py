@@ -49,12 +49,7 @@ from cloud_dast.verification.contract_projection import (
 )
 from cloud_dast.verification.coverage import Builder
 from cloud_dast.verification.evidence_facts import verified_fact
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import grounded, primitive_router
 from tests.support.guardrails import AllowAllGuardrail
 
 
@@ -132,8 +127,8 @@ def _runner(
     return assemble_runner(
         checker,
         EventProjection(events, events),
-        grounded_oracle=GroundedOutcomeOracle(),
-        primitive_oracle=PrimitiveOracleRouter(),
+        grounded_oracle=grounded.Oracle(),
+        primitive_oracle=primitive_router.Oracle(),
         metrics=metrics,
     )
 

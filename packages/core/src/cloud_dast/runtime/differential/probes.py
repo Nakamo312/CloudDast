@@ -30,7 +30,7 @@ from cloud_dast.verification.differential.modes import (
     TIMING_REPEATS,
     DiffMode,
 )
-from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles import latency
 
 logger = logging.getLogger("cloud_dast.runtime.differential.probes")
 _EXECUTABLE_CONTEXTS = frozenset({Context.CONTRACT, Context.ACCEPTED})
@@ -45,7 +45,7 @@ class ProbeCallbacks:
 
     executor: ProbeExecutor
     outcomes: OutcomeRecorder
-    latency_oracle: LatencyOracle | None = None
+    latency_oracle: latency.Oracle | None = None
     scenario_repository: ScenarioRepository | None = None
 
 

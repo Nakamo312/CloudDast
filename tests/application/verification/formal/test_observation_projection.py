@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from cloud_dast.infrastructure.runtime import MemoryEvidenceChannel
 from cloud_dast.model import (
     AccessOutcome,
@@ -378,6 +380,29 @@ def test_projector_polls_only_matching_persisted_oob_callback() -> None:
 
     callbacks = [fact.args[1].value for fact in _named(graph, "observed_external_call")]
     assert callbacks == ["marker:canary-123"]
+
+
+def test_invalid_observation_fails_before_reading_captured_callbacks() -> None:
+    reads = []
+
+    class UnavailableChannel:
+        def wait_for(self, marker, timeout, *, channel):
+            reads.append((marker, timeout, channel))
+            raise RuntimeError("captured evidence unavailable")
+
+    projector = ObservationProjector(oob_events=UnavailableChannel())
+    observation = make_observation().model_copy(update={"probe_marker": "candidate"})
+
+    with pytest.raises(ValueError):
+        projector.project(
+            observation.model_copy(update={"duration_ms": float("inf")}),
+            "orders.Create",
+        )
+    assert reads == []
+
+    with pytest.raises(RuntimeError, match="captured evidence unavailable"):
+        projector.project(observation, "orders.Create")
+    assert reads == [("candidate", 0.0, "oob")]
 
 
 def test_projector_emits_transport_status_aggregate() -> None:

@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from cloud_dast.composition.runtime import diff_modes_from_environment
+from cloud_dast.contracts.execution import LiveRequest
 from cloud_dast.contracts.plan import (
     InvariantProjection,
     QdlExecutionStep,
     VerificationPlan,
 )
+from cloud_dast.infrastructure.events import EventBus
 from cloud_dast.model import (
+    AccessOutcome,
     Check,
     EndpointLayer,
     FieldSpec,
     MethodSpec,
+    Observation,
     PrincipalRef,
     ResourceRef,
+    ResponseData,
     ScenarioPosition,
     ScenarioProfile,
     ScopeRelation,
@@ -36,7 +43,12 @@ from cloud_dast.qdl.graph import (
     create,
     input_field,
 )
+from cloud_dast.qdl.graph_ops import merge_graphs
+from cloud_dast.runtime.budget import CallLimits
 from cloud_dast.runtime.deficits.queue import DeficitQueue
+from cloud_dast.runtime.differential.executor import ProbeExecutor
+from cloud_dast.runtime.differential.specs import SpecResolver
+from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
@@ -52,6 +64,7 @@ from cloud_dast.verification.differential.modes import (
     MUTABLE_INPUT_ROLE,
     PAYLOAD_ROLE,
 )
+from tests.support.guardrails import AllowAllGuardrail
 
 
 def _position(principal: str = "attacker") -> ScenarioPosition:
@@ -357,6 +370,7 @@ def test_readback_spec_validates_the_pairing_contract() -> None:
         write_method=write,
         read_method=read,
         resource_binding="order_id",
+        mutable_fields=("total", "note"),
     )
     assert spec.resource_binding == "order_id"
 
@@ -365,12 +379,14 @@ def test_readback_spec_validates_the_pairing_contract() -> None:
             write_method=write,
             read_method=write,
             resource_binding="order_id",
+            mutable_fields=("total", "note"),
         )
     with pytest.raises(ValueError, match="field of the read method"):
         ReadBackSpec(
             write_method=write,
             read_method=read,
             resource_binding="user_id",
+            mutable_fields=("total", "note"),
         )
 
 
@@ -531,3 +547,97 @@ def test_diff_modes_from_environment(monkeypatch) -> None:
     monkeypatch.setenv("CLOUD_DAST_DIFF_MODES", "factors,bogus")
     with pytest.raises(RuntimeError, match="CLOUD_DAST_DIFF_MODES"):
         diff_modes_from_environment()
+
+
+@pytest.mark.parametrize("guard_role", [None, CREDENTIAL_ROLE])
+def test_readback_executes_only_role_resolved_mutations(invariant, guard_role):
+    write = _update_method().model_copy(
+        update={
+            "fields": tuple(
+                FieldSpec(name=name, type="string")
+                for name in ("order_id", "note", "guard")
+            )
+        }
+    )
+    read, scenario = _get_method(), _position()
+    roles = (("order_id", OBJECT_REF_ROLE), ("note", PAYLOAD_ROLE))
+    if guard_role is not None:
+        roles += (("guard", guard_role),)
+    graph = merge_graphs(_readback_graph(write, read), _field_role_graph(write, roles))
+    assert payload_fields(write, resolve_field_roles(graph)) == ("note",)
+    step = _execution_step(write, scenario, invariant)
+    step = replace(
+        step, plan=step.plan.model_copy(update={"resource_params": ("order_id",)})
+    )
+    spec = SpecResolver().readback_spec(
+        step, graph, {write.method_id: write, read.method_id: read}, DeficitQueue()
+    )
+    assert spec is not None
+
+    class Generator:
+        def generate(self, plan, method, invariant, scenario):
+            request = (("order_id", "order-1001"),)
+            if method.method_id == write.method_id:
+                request += (("note", "before"), ("guard", "KEEP"))
+            yield Check(
+                invariant_id=invariant.invariant_id,
+                method_id=method.method_id,
+                scenario_id=scenario.scenario_id,
+                request=request,
+                identities=("attacker",),
+            )
+
+    executed = []
+
+    def target(check):
+        executed.append(check)
+        return Observation(
+            check_id=check.check_id,
+            scenario_id=check.scenario_id,
+            observed_outcome=AccessOutcome.ALLOWED,
+            response_summary="OK",
+            output=ResponseData(fields=(("order_id", "order-1001"),)),
+        )
+
+    events = EventBus()
+    checker = Checker(target, Generator(), AllowAllGuardrail(), events)
+    budget = CallLimits(3)
+    result = ProbeExecutor(checker, events).execute_readback(
+        step,
+        spec,
+        LiveRequest(
+            service=write.service,
+            principal_id="attacker",
+            resource_id="order-1001",
+            max_checks=3,
+        ),
+        budget,
+    )
+    assert len(executed) == checker.count == budget.live_calls == 3
+    assert budget.diff_legs == 3
+    assert tuple(check.method_id for check in executed) == (
+        read.method_id,
+        write.method_id,
+        read.method_id,
+    )
+    assert all(check.identities == ("attacker",) for check in executed)
+    request = dict(result.write_check.request)
+    assert request["order_id"] == "order-1001"
+    assert request["note"] == f"'{payload_canary(write.method_id)}'"
+    assert request["guard"] == "KEEP"
+    assert spec.mutable_fields == ("note",)
+
+
+def test_payload_pair_requires_explicit_mutable_fields():
+    method, scenario = _update_method(), _position()
+    baseline = _baseline_check(method, scenario)
+    with pytest.raises(TypeError, match="mutable_fields"):
+        PayloadPairSpec.from_baseline(method, scenario, baseline, canary="canary")
+    with pytest.raises(TypeError):
+        PayloadPairSpec.from_baseline(
+            method,
+            scenario,
+            baseline,
+            canary="canary",
+            mutable_fields=None,
+        )

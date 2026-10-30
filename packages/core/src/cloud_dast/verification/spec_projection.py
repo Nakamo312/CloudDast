@@ -13,9 +13,9 @@ from cloud_dast.model import (
     MethodSpec,
     RequestSchema,
 )
+from cloud_dast.verification import contract_projection
 from cloud_dast.verification.contract_projection import (
     ClassificationProfile,
-    ContractProjection,
     ContractProjector,
 )
 
@@ -73,7 +73,7 @@ class SpecProjector:
     ) -> None:
         self._projector = ContractProjector(classification_profile)
 
-    def project(self, specification: InputSpecification) -> ContractProjection:
+    def project(self, specification: InputSpecification) -> contract_projection.Result:
         """Compile one input specification into extension-safe QDL facts."""
 
         methods = tuple(

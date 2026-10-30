@@ -76,12 +76,7 @@ from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.primitive_router import (
-    PrimitiveOracleRouter,
-)
+from cloud_dast.verification.oracles import grounded, primitive_router
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,
@@ -460,8 +455,8 @@ def test_promotion_fixed_point_closes_deficit_and_scores_new_path(
         runner = assemble_runner(
             checker,
             EventProjection(bus, events),
-            grounded_oracle=GroundedOutcomeOracle(),
-            primitive_oracle=PrimitiveOracleRouter(),
+            grounded_oracle=grounded.Oracle(),
+            primitive_oracle=primitive_router.Oracle(),
             formal_repository=repository,
         )
         execution = runner.execute_plan(request, rebound.plan, rebound.execution)

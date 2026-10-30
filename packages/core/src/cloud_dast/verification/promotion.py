@@ -63,18 +63,6 @@ _EXTRA_SEMANTIC_PREDICATES = frozenset(
 logger = logging.getLogger("cloud_dast.verification.promotion")
 
 
-def _semantic_effects():
-    """Load QDL semantic compilation helpers at the verification boundary."""
-
-    from cloud_dast.qdl.semantic_norm_compiler import (
-        duration_effects,
-        reached_effects,
-        sensitive_exposure_effects,
-    )
-
-    return duration_effects, reached_effects, sensitive_exposure_effects
-
-
 def lead_descriptor(fact: Fact) -> LeadDescriptor | None:
     """Project one proposal fact onto stable lead coordinates.
 
@@ -1295,9 +1283,8 @@ def _calibrated_duration_effect(
     action_id = atom_value(effect.args[0]) if effect.args else None
     if action_id is None:
         return None
-    duration_effects, _reached_effects, _sensitive_exposure_effects = (
-        _semantic_effects()
-    )
+    from cloud_dast.qdl.semantic_norm_compiler import duration_effects
+
     normalized = action_id.removeprefix("action:")
     for baseline_action, threshold in duration_thresholds.items():
         if baseline_action.removeprefix("action:") == normalized:
@@ -1368,7 +1355,11 @@ def _supported_semantic_effects(
     if not graphs:
         return frozenset()
     graph = merge_graphs(*graphs)
-    _duration_effects, reached_effects, sensitive_exposure_effects = _semantic_effects()
+    from cloud_dast.qdl.semantic_norm_compiler import (
+        reached_effects,
+        sensitive_exposure_effects,
+    )
+
     effects = (*sensitive_exposure_effects(graph), *reached_effects(graph))
     return frozenset(canonical_json(effect) for effect in effects)
 
@@ -1697,9 +1688,8 @@ def _lead_norm_bundles(
 
     if not parked:
         return {}
-    _duration_effects, _reached_effects, sensitive_exposure_effects = (
-        _semantic_effects()
-    )
+    from cloud_dast.qdl.semantic_norm_compiler import sensitive_exposure_effects
+
     try:
         exposed = {
             canonical_json(effect.args[1]): effect

@@ -30,7 +30,7 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.runtime.execution.checks import bind_event_context, run_check
 from cloud_dast.verification.coverage import Builder
-from cloud_dast.verification.oracles import DifferentialOracle
+from cloud_dast.verification.oracles import differential
 
 
 def fact(predicate, *args, context=Context.CONTRACT):
@@ -102,7 +102,7 @@ def test_partial_snapshot_requires_completeness_for_absence(
         if channel == "state"
         else (observation("before", before), observation("after", after))
     )
-    verdict = DifferentialOracle().evaluate_policy(invariant(), trace)
+    verdict = differential.Oracle().evaluate_policy(invariant(), trace)
     assert verdict.status is (
         VerdictStatus.FAIL if changed_value else VerdictStatus.UNSCOREABLE
     )
@@ -117,13 +117,13 @@ def test_partial_snapshot_requires_completeness_for_absence(
 def test_path_missing_from_partial_snapshot_does_not_prove_change():
     before = observation("before", (("items.0.total", 10), ("items.1.total", 20)))
     after = observation("after", (("items.0.total", 10), ("__truncated__", True)))
-    verdict = DifferentialOracle().evaluate_policy(invariant(), (before, after))
+    verdict = differential.Oracle().evaluate_policy(invariant(), (before, after))
     assert verdict.status is VerdictStatus.UNSCOREABLE
 
 
 def test_complete_snapshot_still_proves_unchanged_or_removed_values():
     before = observation("before", (("items.0.total", 10), ("items.1.total", 20)))
-    oracle = DifferentialOracle()
+    oracle = differential.Oracle()
     unchanged = oracle.evaluate_policy(
         invariant(), (before, observation("same", before.response_tree))
     )
@@ -143,7 +143,7 @@ def test_complete_state_is_independent_of_truncated_response():
         before=(("total", 10),),
         after=(("total", 10),),
     )
-    verdict = DifferentialOracle().evaluate_policy(invariant(), (write,))
+    verdict = differential.Oracle().evaluate_policy(invariant(), (write,))
     assert verdict.status is VerdictStatus.PASS
 
 
@@ -379,7 +379,7 @@ def test_real_runner_oracle_events_drive_coverage(
 def test_concurrency_uses_same_snapshot_completeness(total, expected):
     before = observation("before", (("items.0.total", 10), ("__truncated__", True)))
     after = observation("after", (("items.0.total", total), ("__truncated__", True)))
-    verdict = DifferentialOracle().evaluate_concurrency_policy(
+    verdict = differential.Oracle().evaluate_concurrency_policy(
         invariant(),
         read_before=before,
         read_after=after,
@@ -400,7 +400,7 @@ def test_safe_output_projection_cannot_supply_complete_negative_snapshot():
     after = observation("after").model_copy(
         update={"output": ResponseData(fields=(("total", 10),))}
     )
-    verdict = DifferentialOracle().evaluate_policy(invariant(), (before, after))
+    verdict = differential.Oracle().evaluate_policy(invariant(), (before, after))
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert not verdict.negative_scope
 

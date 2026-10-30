@@ -15,9 +15,7 @@ from cloud_dast.ports import EvidenceChannel, OobEvaluator, OobUrlFactory
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, duration
 from cloud_dast.runtime import oob
 from cloud_dast.runtime.campaign import LiveWorkflow
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
+from cloud_dast.verification.oracles import latency, primitive_router, witness
 
 
 def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
@@ -38,8 +36,8 @@ def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
         with app() as run:
             coordinator = run.get(oob.Coordinator)
             assert run.get(OobEvaluator) is coordinator
-            router = run.get(PrimitiveOracleRouter)
-            assert router._witness is run.get(WitnessSignalOracle)
+            router = run.get(primitive_router.Oracle)
+            assert router._witness is run.get(witness.Oracle)
             assert router._witness._oob is coordinator
             workflow = run.get(LiveWorkflow)
             assert workflow._finalizer._oob is coordinator
@@ -81,9 +79,9 @@ def test_router_uses_run_calibration_without_leaking_to_next_run(
     with container as app:
         for calibrated in (True, False):
             with app() as run:
-                router = run.get(PrimitiveOracleRouter)
+                router = run.get(primitive_router.Oracle)
                 if calibrated:
-                    run.get(LatencyOracle).update_baseline(
+                    run.get(latency.Oracle).update_baseline(
                         method_spec.method_id, (100, 100, 100)
                     )
                 verdict = router.evaluate_policy(

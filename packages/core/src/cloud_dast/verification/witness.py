@@ -150,6 +150,13 @@ def is_echo_path(
     return any(segment in probe_fields for segment in segments)
 
 
+def read_state(fields: tuple[tuple[str, object], ...]) -> str | None:
+    """Return the sole string value in one explicit resource-state channel."""
+
+    values = [value for _, value in fields if isinstance(value, str) and value]
+    return values[0] if len(values) == 1 else None
+
+
 def response_is_incomplete(observation: Observation) -> bool:
     """Return whether response evidence contains an explicit incomplete path."""
 
@@ -328,6 +335,7 @@ __all__ = [
     "path_matches",
     "path_values",
     "path_witness",
+    "read_state",
     "response_is_incomplete",
     "response_values",
     "value_contains",

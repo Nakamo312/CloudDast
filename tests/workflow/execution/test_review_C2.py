@@ -77,9 +77,7 @@ from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
-from cloud_dast.verification.oracles import PrimitiveOracleRouter
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
+from cloud_dast.verification.oracles import latency, primitive_router, witness
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_reporting import CoverageSnapshot, PhaseChanged, PlanReady
 from tests.support.guardrails import AllowAllGuardrail
@@ -365,7 +363,7 @@ class ExplodingGrounding:
         raise AssertionError("missing_baseline must not call reactive model grounding")
 
 
-def _workflow(oracle: LatencyOracle) -> LiveWorkflow:
+def _workflow(oracle: latency.Oracle) -> LiveWorkflow:
     return assemble_workflow(
         grounding=ExplodingGrounding(),
         scenario_binder=None,
@@ -392,7 +390,7 @@ def _request(method=None, max_checks=None):
 
 
 def test_bootstrap_baseline_closes_existing_deficit():
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     oracle.update_baseline("orders.Get", (100.0,), min_samples=1)
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
@@ -409,7 +407,7 @@ def test_bootstrap_baseline_closes_existing_deficit():
 
 @pytest.mark.parametrize("max_tasks", [None, 1])
 def test_insufficient_evidence_waits_until_a_new_sample(max_tasks, scenario_position):
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     workflow = _workflow(oracle)
     accumulator = CampaignAccumulator.empty()
     accumulator.observations.extend((_observation(1, 100.0), _observation(2, 102.0)))
@@ -634,7 +632,7 @@ def test_latency_campaign_reaches_fixed_point(
     max_checks,
 ):
     """Actual main loop + runner, including a round with no execution."""
-    oracle = LatencyOracle()
+    oracle = latency.Oracle()
     path = _latency_execution_path(method_spec, verification_plan, scenario_position)
     graph = QdlGraph()
     binding = ScenarioBinding(
@@ -662,8 +660,8 @@ def test_latency_campaign_reaches_fixed_point(
     runner = assemble_runner(
         _service((method_spec,), target, bus),
         event_projection,
-        primitive_oracle=PrimitiveOracleRouter(
-            witness_oracle=WitnessSignalOracle(latency_oracle=oracle)
+        primitive_oracle=primitive_router.Oracle(
+            witness_oracle=witness.Oracle(latency_oracle=oracle)
         ),
     )
     if not delivered:

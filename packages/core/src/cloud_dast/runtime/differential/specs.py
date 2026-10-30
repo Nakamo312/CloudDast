@@ -13,8 +13,8 @@ from cloud_dast.qdl.field_roles import resolve_field_roles
 from cloud_dast.qdl.graph import Context, QdlGraph
 from cloud_dast.runtime.deficits import missing_role_deficit
 from cloud_dast.runtime.deficits.queue import DeficitQueue
+from cloud_dast.verification.differential import contracts
 from cloud_dast.verification.differential.contracts import (
-    DifferentialSpec,
     ReadBackSpec,
     payload_fields,
     read_resource_reference,
@@ -69,6 +69,7 @@ class SpecResolver:
                 write_method=step.method,
                 read_method=read_method,
                 resource_binding=reference[0],
+                mutable_fields=mutable_fields,
                 read_resource_types=(reference,),
             )
         except ValueError as error:
@@ -136,13 +137,13 @@ class SpecResolver:
         step: QdlExecutionStep,
         graph: QdlGraph,
         deficits: DeficitQueue,
-    ) -> DifferentialSpec | None:
+    ) -> contracts.Spec | None:
         """Build a one-factor control/treatment pair for one step.
 
         The treatment is the request's own scenario — in a DAST campaign
         that is the attacker position from the profile.  The control is the
         subject declared by an explicit owner fact; a missing or ambiguous
-        fact becomes a role deficit.  ``DifferentialSpec`` itself enforces
+        fact becomes a role deficit.  ``contracts.Spec`` itself enforces
         that exactly one profile factor differs.
         """
 
@@ -153,7 +154,7 @@ class SpecResolver:
         if control is None:
             return None
         try:
-            return DifferentialSpec(control=control, treatment=treatment)
+            return contracts.Spec(control=control, treatment=treatment)
         except ValueError:
             logger.debug(
                 "diff_pair_rejected action=%s reason=not-one-factor",

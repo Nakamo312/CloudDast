@@ -31,7 +31,7 @@ class _FieldSnapshot:
     complete: bool
 
 
-class DifferentialOracle:
+class Oracle:
     """Compare a forbidden resource field across paired or concurrent evidence.
 
     The oracle is a verdict layer only: it consumes already captured

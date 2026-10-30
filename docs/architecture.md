@@ -20,7 +20,7 @@ the core speaks only the QDL algebra and facts.
 |---|---|---|
 | `ProvisionerPort` | create one stand fixture from a fact | `CloudProvisioner` (live transport + provisioner identity); future: local process orchestration, sandbox APIs |
 | `Target` / `OobUrlFactory` | execute one probe request, OOB canary URLs | gRPC/HTTP adapters |
-| `PrimitiveOracleRouter` | deterministic verdicts over the six witness channels (П1–П6) | outcome, field, latency, marker, OOB, trace oracles |
+| `primitive_router.Oracle` | deterministic verdicts over the six witness channels (П1–П6) | outcome, field, latency, marker, OOB, trace oracles |
 | `ModelClient` | LLM proposals (semantic compiler) | GLM/other model adapters |
 | `GroundingCache` | persist validated semantic-grounding proposals | `FileGroundingCache` |
 | `FormalRepository`, `MethodRepository`, `ScenarioRepository` | graph persistence | Neo4j adapters |

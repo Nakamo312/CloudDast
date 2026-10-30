@@ -136,14 +136,13 @@ from cloud_dast.verification.differential.contracts import (
     IsolatedStandPolicy,
 )
 from cloud_dast.verification.oracles import (
-    FieldExposureOracle,
-    GroundedOutcomeOracle,
-    LatencyBaseline,
-    LatencyOracle,
-    MarkerOracle,
-    PrimitiveOracleRouter,
-    SequenceOracle,
-    WitnessSignalOracle,
+    field_exposure,
+    grounded,
+    latency,
+    marker,
+    primitive_router,
+    sequence,
+    witness,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.projection import ObservationProjector
@@ -320,10 +319,10 @@ class FileScenarioRepository:
         )
 
 
-def _latency_oracle_from_environment() -> LatencyOracle:
+def _latency_oracle_from_environment() -> latency.Oracle:
     raw = os.environ.get("CLOUD_DAST_LATENCY_BASELINES", "").strip()
     if not raw:
-        return LatencyOracle()
+        return latency.Oracle()
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as error:
@@ -344,10 +343,10 @@ def _latency_oracle_from_environment() -> LatencyOracle:
             raise RuntimeError(
                 f"latency baseline for {method_id} requires durations_ms"
             )
-        baselines[method_id] = LatencyBaseline.from_durations(
+        baselines[method_id] = latency.Baseline.from_durations(
             method_id, tuple(float(value) for value in durations)
         )
-    return LatencyOracle(baselines)
+    return latency.Oracle(baselines)
 
 
 def _skip_llm_grounding_from_environment() -> bool:
@@ -695,24 +694,24 @@ class RunProvider(Provider):
         return DefaultGeneratorCatalog(generator_selector)
 
     @provide(scope=RunScope)
-    def grounded_outcome_oracle(self) -> GroundedOutcomeOracle:
-        return GroundedOutcomeOracle()
+    def grounded_outcome_oracle(self) -> grounded.Oracle:
+        return grounded.Oracle()
 
     @provide(scope=RunScope)
-    def field_exposure_oracle(self) -> FieldExposureOracle:
-        return FieldExposureOracle()
+    def field_exposure_oracle(self) -> field_exposure.Oracle:
+        return field_exposure.Oracle()
 
     @provide(scope=RunScope)
-    def latency_oracle(self) -> LatencyOracle:
+    def latency_oracle(self) -> latency.Oracle:
         return _latency_oracle_from_environment()
 
     @provide(scope=RunScope)
-    def marker_oracle(self) -> MarkerOracle:
-        return MarkerOracle()
+    def marker_oracle(self) -> marker.Oracle:
+        return marker.Oracle()
 
     @provide(scope=RunScope)
-    def sequence_oracle(self) -> SequenceOracle:
-        return SequenceOracle()
+    def sequence_oracle(self) -> sequence.Oracle:
+        return sequence.Oracle()
 
     @provide(scope=RunScope, provides=EvidenceChannel)
     def evidence_channel(self, event_store: EventStore) -> EvidenceChannel:
@@ -772,11 +771,11 @@ class RunProvider(Provider):
     @provide(scope=RunScope)
     def witness_oracle(
         self,
-        latency_oracle: LatencyOracle,
-        marker_oracle: MarkerOracle,
+        latency_oracle: latency.Oracle,
+        marker_oracle: marker.Oracle,
         oob_evaluator: OobEvaluator,
-    ) -> WitnessSignalOracle:
-        return WitnessSignalOracle(
+    ) -> witness.Oracle:
+        return witness.Oracle(
             latency_oracle=latency_oracle,
             marker_oracle=marker_oracle,
             oob_oracle=oob_evaluator,
@@ -785,12 +784,12 @@ class RunProvider(Provider):
     @provide(scope=RunScope)
     def primitive_oracle_router(
         self,
-        grounded_outcome_oracle: GroundedOutcomeOracle,
-        field_exposure_oracle: FieldExposureOracle,
-        sequence_oracle: SequenceOracle,
-        witness_oracle: WitnessSignalOracle,
-    ) -> PrimitiveOracleRouter:
-        return PrimitiveOracleRouter(
+        grounded_outcome_oracle: grounded.Oracle,
+        field_exposure_oracle: field_exposure.Oracle,
+        sequence_oracle: sequence.Oracle,
+        witness_oracle: witness.Oracle,
+    ) -> primitive_router.Oracle:
+        return primitive_router.Oracle(
             grounded_oracle=grounded_outcome_oracle,
             field_oracle=field_exposure_oracle,
             sequence_oracle=sequence_oracle,
@@ -820,7 +819,7 @@ class RunProvider(Provider):
     @provide(scope=RunScope)
     def workflow_options(
         self,
-        latency_oracle: LatencyOracle,
+        latency_oracle: latency.Oracle,
         scenario_repository: ScenarioRepository,
         formal_repository: FormalRepository,
         event_bus: EventPublisher,
@@ -1047,8 +1046,8 @@ class RunProvider(Provider):
         self,
         checker: Checker,
         event_projection: EventProjection,
-        grounded_outcome_oracle: GroundedOutcomeOracle,
-        primitive_oracle_router: PrimitiveOracleRouter,
+        grounded_outcome_oracle: grounded.Oracle,
+        primitive_oracle_router: primitive_router.Oracle,
         formal_repository: FormalRepository,
         fuzz_session_factory: FuzzSessionFactory,
         example_database: FindingExampleStore,

@@ -42,7 +42,7 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, denied
-from cloud_dast.verification.oracles import GroundedOutcomeOracle
+from cloud_dast.verification.oracles import grounded
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STAND_PATH = PROJECT_ROOT / "benchmarks" / "nsfy-bench" / "stand.json"
@@ -252,7 +252,7 @@ def test_grounded_oracle_passes_for_allowed_authorized_methods(
         response_summary="method allowed",
         transport_status=HttpStatus(code=200),
     )
-    verdict = GroundedOutcomeOracle().evaluate_outcome(
+    verdict = grounded.Oracle().evaluate_outcome(
         _allowed_invariant(method_id),
         observation,
         method,

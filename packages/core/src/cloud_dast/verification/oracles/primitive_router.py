@@ -11,21 +11,17 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.verification.norms import NormView
-from cloud_dast.verification.oracles.differential import (
-    DifferentialOracle,
+from cloud_dast.verification.oracles import (
+    differential,
+    field_exposure,
+    grounded,
+    sequence,
+    witness,
 )
-from cloud_dast.verification.oracles.field_exposure import (
-    FieldExposureOracle,
-)
-from cloud_dast.verification.oracles.grounded import (
-    GroundedOutcomeOracle,
-)
-from cloud_dast.verification.oracles.sequence import SequenceOracle
 from cloud_dast.verification.oracles.trace import ObservationTrace
-from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 
 
-class PrimitiveOracleRouter:
+class Oracle:
     """Dispatch a QDL norm to its deterministic primitive oracle.
 
     Witness primitives are selected only after observation projection: every
@@ -37,17 +33,17 @@ class PrimitiveOracleRouter:
     def __init__(
         self,
         *,
-        grounded_oracle: GroundedOutcomeOracle | None = None,
-        field_oracle: FieldExposureOracle | None = None,
-        differential_oracle: DifferentialOracle | None = None,
-        sequence_oracle: SequenceOracle | None = None,
-        witness_oracle: WitnessSignalOracle | None = None,
+        grounded_oracle: grounded.Oracle | None = None,
+        field_oracle: field_exposure.Oracle | None = None,
+        differential_oracle: differential.Oracle | None = None,
+        sequence_oracle: sequence.Oracle | None = None,
+        witness_oracle: witness.Oracle | None = None,
     ) -> None:
-        self._grounded = grounded_oracle or GroundedOutcomeOracle()
-        self._field = field_oracle or FieldExposureOracle()
-        self._differential = differential_oracle or DifferentialOracle()
-        self._sequence = sequence_oracle or SequenceOracle()
-        self._witness = witness_oracle or WitnessSignalOracle()
+        self._grounded = grounded_oracle or grounded.Oracle()
+        self._field = field_oracle or field_exposure.Oracle()
+        self._differential = differential_oracle or differential.Oracle()
+        self._sequence = sequence_oracle or sequence.Oracle()
+        self._witness = witness_oracle or witness.Oracle()
 
     def evaluate_policy(
         self,

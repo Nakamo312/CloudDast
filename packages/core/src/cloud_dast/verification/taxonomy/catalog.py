@@ -296,31 +296,6 @@ class ClassCatalog:
             return ()
         return self._candidates(norm)
 
-    def classify(
-        self,
-        invariant: InvariantProjection,
-        facts: ClassificationFacts | None = None,
-        action_id: str | None = None,
-    ) -> ClassEntry | None:
-        """Return the active class entry for a QDL-grounded failed check."""
-
-        try:
-            norm = NormView.from_invariant(invariant)
-        except ValueError:
-            return None
-        if norm is None:
-            return None
-
-        candidates = self._candidates(norm)
-        if not candidates:
-            return None
-        return self._select_entry(
-            candidates,
-            norm,
-            facts or ClassificationFacts(),
-            action_id,
-        )
-
     def classify_finding(
         self,
         invariant: InvariantProjection,

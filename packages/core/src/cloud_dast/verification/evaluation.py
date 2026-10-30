@@ -9,16 +9,22 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
-from cloud_dast.model import AccessOutcome, Observation, PolicyVerdict, VerdictStatus
-from cloud_dast.qdl.graph import Struct
-from cloud_dast.verification.differential.contracts import (
-    DifferentialEvidenceView,
+from cloud_dast.contracts.execution import LiveRequest
+from cloud_dast.contracts.plan import InvariantProjection, QdlExecutionStep
+from cloud_dast.model import (
+    AccessOutcome,
+    MethodSpec,
+    Observation,
+    PolicyVerdict,
+    ScenarioPosition,
+    VerdictStatus,
 )
+from cloud_dast.qdl.graph import Struct
+from cloud_dast.verification.differential import contracts
 from cloud_dast.verification.findings import attach_finding_identity
 from cloud_dast.verification.norms import NormCompiler
-from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
+from cloud_dast.verification.oracles import primitive_router
 from cloud_dast.verification.projection import ObservationProjector
 
 
@@ -40,9 +46,9 @@ class ObservationEvaluator:
     def __init__(
         self,
         *,
-        primitive_oracle: PrimitiveOracleRouter,
+        primitive_oracle: primitive_router.Oracle,
         observation_projector: ObservationProjector | None,
-        build_evidence_key: Callable[[Any, Any], tuple[str, ...]],
+        build_evidence_key: Callable[[QdlExecutionStep, LiveRequest], tuple[str, ...]],
         norm_compiler: NormCompiler | None = None,
     ) -> None:
         self._primitive_oracle = primitive_oracle
@@ -52,13 +58,13 @@ class ObservationEvaluator:
 
     def evaluate(
         self,
-        step: Any,
+        step: QdlExecutionStep,
         observation: Observation,
-        request: Any,
+        request: LiveRequest,
         path_observations: tuple[Observation, ...],
         *,
         default_reason: str,
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> ObservationEvaluation:
         """Classify an observation and derive scheduler-safe progress."""
 
@@ -119,16 +125,16 @@ class ObservationEvaluator:
 
     def classify(
         self,
-        invariant: Any,
+        invariant: InvariantProjection,
         observation: Observation,
         trace: tuple[Observation, ...],
         *,
-        method: Any,
-        scenario: Any,
+        method: MethodSpec,
+        scenario: ScenarioPosition,
         evidence_key: tuple[str, ...],
         probe_fields: tuple[str, ...] = (),
         sink_types: dict[str, str] | None = None,
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> tuple[VerdictStatus, PolicyVerdict | None]:
         if invariant.norm_fact is not None:
             try:
@@ -198,12 +204,12 @@ class ObservationEvaluator:
 
     def _concurrency_verdict(
         self,
-        invariant: Any,
-        method: Any,
+        invariant: InvariantProjection,
+        method: MethodSpec,
         evidence_key: tuple[str, ...],
         observation: Observation,
         *,
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> PolicyVerdict | None:
         """Score a changed norm from a complete saved concurrency batch."""
 
@@ -224,11 +230,11 @@ class ObservationEvaluator:
 
     def trace_for_step(
         self,
-        invariant: Any,
+        invariant: InvariantProjection,
         path_trace: tuple[Observation, ...],
         *,
         evidence_key: tuple[str, ...],
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> tuple[Observation, ...]:
         """Return the evidence trace explicitly required by one invariant."""
 
@@ -273,7 +279,7 @@ class ObservationEvaluator:
         evidence_key: tuple[str, ...],
         observation: Observation,
         *,
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> tuple[Observation, ...] | None:
         if evidence_store is None:
             return None
@@ -291,7 +297,7 @@ class ObservationEvaluator:
         evidence_key: tuple[str, ...],
         observation: Observation,
         *,
-        evidence_store: DifferentialEvidenceView | None = None,
+        evidence_store: contracts.EvidenceView | None = None,
     ) -> tuple[Observation, ...]:
         if evidence_store is None:
             return ()
