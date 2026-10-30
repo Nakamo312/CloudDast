@@ -66,6 +66,7 @@ from cloud_dast.runtime.deficits.work_items import (
     WorkItemGrounding,
     single_deficit_work_item,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.contract_projection import (
@@ -722,7 +723,7 @@ def test_setup_gap_drains_through_fixture_consultation() -> None:
     grounding = FixtureReactiveGrounding()
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding,
         source=SimpleNamespace(load=lambda *args, **kwargs: QdlGraph()),
@@ -925,7 +926,7 @@ def _drain_workflow(*, source=None) -> tuple[LiveWorkflow, FakeReactiveGrounding
     )
     return assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding,
         source=source or SimpleNamespace(load=lambda *args, **kwargs: QdlGraph()),
@@ -1036,7 +1037,7 @@ def test_work_item_outcome_is_absorbing_until_new_evidence(
     grounding = FailingReactiveGrounding()
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding,
         source=SimpleNamespace(load=lambda *args, **kwargs: QdlGraph()),
@@ -1158,7 +1159,7 @@ def test_latency_work_item_baseline_branches(action: str, state: str, caplog) ->
     oracle.update_baseline_from_observations.return_value = state == "updated"
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         options=LiveWorkflowOptions(
             latency_oracle=None if state == "missing" else oracle,
@@ -1237,7 +1238,7 @@ def test_promotion_closes_every_deficit_requiring_the_promoted_fact() -> None:
     grounding = ExposureReactiveGrounding()
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding,
         source=SimpleNamespace(load=lambda *args, **kwargs: QdlGraph()),
@@ -1291,7 +1292,7 @@ def test_promotion_removes_stale_path_deficits() -> None:
     grounding = ExposureReactiveGrounding()
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding,
         source=SimpleNamespace(load=lambda *args, **kwargs: QdlGraph()),

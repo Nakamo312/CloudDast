@@ -64,7 +64,7 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     ),
     "ExecutionResult": ("cloud_dast.contracts.execution", "ExecutionResult"),
     "FindingEvaluator": (
-        "cloud_dast.verification.finding_evaluator",
+        "cloud_dast.runtime.campaign.evaluation",
         "FindingEvaluator",
     ),
     "LiveWorkflow": ("cloud_dast.runtime.campaign.runtime", "LiveWorkflow"),

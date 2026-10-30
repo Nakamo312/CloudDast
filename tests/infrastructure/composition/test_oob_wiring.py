@@ -1,0 +1,140 @@
+"""The OOB port and runtime finalizer share one physical RunScope owner."""
+
+from contextlib import nullcontext
+from types import SimpleNamespace
+
+import pytest
+
+import cloud_dast.composition.run_provider as providers
+from cloud_dast.composition.container import make_cloud_dast_container
+from cloud_dast.infrastructure.events import JsonlEventStore
+from cloud_dast.infrastructure.runtime import OobCollaborator
+from cloud_dast.model import AccessOutcome, Observation
+from cloud_dast.ports import EvidenceChannel, OobEvaluator, OobUrlFactory
+from cloud_dast.runtime import oob
+from cloud_dast.runtime.campaign import LiveWorkflow
+from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
+
+
+def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUD_DAST_STAND_SOURCE", "neo4j")
+
+    def target(check):
+        return Observation(
+            check_id=check.check_id,
+            scenario_id=check.scenario_id,
+            observed_outcome=AccessOutcome.ALLOWED,
+            response_summary="OK",
+        )
+
+    container = make_cloud_dast_container(
+        lambda: nullcontext(), target, JsonlEventStore(tmp_path / "events.jsonl")
+    )
+    with container as app:
+        with app() as run:
+            coordinator = run.get(oob.Coordinator)
+            assert run.get(OobEvaluator) is coordinator
+            router = run.get(PrimitiveOracleRouter)
+            assert router._witness._oob is coordinator
+            workflow = run.get(LiveWorkflow)
+            assert workflow._finalizer._oob is coordinator
+            channel = run.get(EvidenceChannel)
+            assert coordinator._events is channel
+        with app() as run:
+            assert run.get(oob.Coordinator) is not coordinator
+
+
+@pytest.mark.parametrize("abort", [False, True])
+def test_collaborator_closes_at_run_exit(tmp_path, monkeypatch, abort):
+    calls = []
+
+    class Collaborator:
+        def __init__(self, events):
+            self.events = events
+            calls.append(("created", self))
+
+        def stop(self):
+            calls.append(("stopped", self))
+
+    monkeypatch.setenv("CLOUD_DAST_STAND_SOURCE", "neo4j")
+    monkeypatch.setattr(providers, "OobCollaborator", Collaborator)
+    container = make_cloud_dast_container(
+        lambda: nullcontext(),
+        lambda check: None,
+        JsonlEventStore(tmp_path / "events.jsonl"),
+    )
+    with container as app:
+        with app():
+            pass
+        assert calls == []  # An unused resource is never constructed.
+        exit_check = (
+            pytest.raises(RuntimeError, match="aborted") if abort else nullcontext()
+        )
+        with exit_check:
+            with app() as run:
+                first = run.get(OobUrlFactory)
+                assert run.get(OobUrlFactory) is first
+                assert first.events is run.get(EvidenceChannel)
+                assert calls == [("created", first)]
+                if abort:
+                    raise RuntimeError("aborted")
+        assert calls == [("created", first), ("stopped", first)]
+        with app() as run:
+            second = run.get(OobUrlFactory)
+            assert second is not first
+        assert calls == [
+            ("created", first),
+            ("stopped", first),
+            ("created", second),
+            ("stopped", second),
+        ]
+
+
+@pytest.mark.parametrize("abort", [False, True])
+def test_run_exit_stops_polling_and_deregisters_session(tmp_path, monkeypatch, abort):
+    calls = []
+
+    class Transport:
+        callback_host = "oob.invalid"
+
+        def start(self):
+            calls.append("start")
+            return SimpleNamespace(correlation_id="1234567890abcdefghij")
+
+        def poll(self, session):
+            calls.append("poll")
+            return ()
+
+        def stop(self, session):
+            calls.append("stop")
+
+    transport = Transport()
+    monkeypatch.setenv("CLOUD_DAST_STAND_SOURCE", "neo4j")
+    monkeypatch.setattr(
+        providers,
+        "OobCollaborator",
+        lambda events: OobCollaborator(events, client=transport, poll_interval=60),
+    )
+    container = make_cloud_dast_container(
+        lambda: nullcontext(),
+        lambda check: None,
+        JsonlEventStore(tmp_path / "events.jsonl"),
+    )
+    with container as app:
+        exit_check = (
+            pytest.raises(RuntimeError, match="aborted") if abort else nullcontext()
+        )
+        with exit_check:
+            with app() as run:
+                collaborator = run.get(OobUrlFactory)
+                channel = run.get(EvidenceChannel)
+                collaborator.url_for("probe-marker")
+                poller = collaborator._poll_thread
+                assert poller.is_alive()
+                assert channel.ready()
+                assert calls == ["start"]
+                if abort:
+                    raise RuntimeError("aborted")
+        assert not poller.is_alive()
+        assert not channel.ready()
+        assert calls == ["start", "poll", "stop"]

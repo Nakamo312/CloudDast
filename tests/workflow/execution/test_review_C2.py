@@ -68,7 +68,7 @@ from cloud_dast.runtime.deficits import Deficit
 from cloud_dast.runtime.deficits.collection import ClassificationState
 from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.differential.executor import ProbeExecutor
-from cloud_dast.runtime.execution.runner import build_event_scope
+from cloud_dast.runtime.execution.runner import EventProjection, build_event_scope
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
@@ -657,10 +657,10 @@ def test_latency_campaign_reaches_fixed_point(
         calls.append(check)
         return _allowed_target(check).model_copy(update={"duration_ms": 100.0})
 
+    event_projection = EventProjection(bus, events)
     runner = assemble_runner(
         _service((method_spec,), target, bus),
-        bus,
-        events,
+        event_projection,
         primitive_oracle=PrimitiveOracleRouter(latency_oracle=oracle),
     )
     if not delivered:
@@ -700,7 +700,7 @@ def test_latency_campaign_reaches_fixed_point(
     workflow = assemble_workflow(
         SimpleNamespace(bind=lambda *a, **kw: binding),
         runner,
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=LocalGrounding(),
         lifecycle=SimpleNamespace(start_grounded=lambda *args: None),
         options=LiveWorkflowOptions(
@@ -823,6 +823,7 @@ def test_accepted_wave_executes_before_later_consultation_and_startup(
             deficits.record_work_item_success(item)
         return WaveExecution(int(waves == 1), promoted_graph)
 
+    event_projection = EventProjection(bus, events)
     workflow = assemble_workflow(
         ScenarioBinder(
             MethodRepo((method_spec,)),
@@ -832,11 +833,10 @@ def test_accepted_wave_executes_before_later_consultation_and_startup(
         ),
         assemble_runner(
             _service((method_spec,), target, bus),
-            bus,
-            events,
+            event_projection,
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=LocalGrounding(),
         lifecycle=SimpleNamespace(start_grounded=lambda *args: Handle()),
         options=LiveWorkflowOptions(

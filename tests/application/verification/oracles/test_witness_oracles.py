@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
     JsonValue,
     Observation,
+    ResponseData,
     Severity,
     VerdictStatus,
 )
@@ -18,6 +21,7 @@ from cloud_dast.qdl.graph import (
     external_call,
     reached,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
     KnownContentWitness,
     LatencyBaseline,
@@ -27,7 +31,7 @@ from cloud_dast.verification.oracles import (
     WitnessSignalOracle,
     extract_witness_signals,
 )
-from cloud_dast.verification.oracles.oob import OobOracle
+from cloud_dast.verification.oracles import oob as verification_oob
 
 
 class _ReadyEventStore:
@@ -131,10 +135,11 @@ def test_signal_extraction_is_independent_of_expected_class() -> None:
 def test_configured_oob_oracle_contributes_a_nonblocking_signal() -> None:
     marker = "dast-oob-candidate"
     oracle = WitnessSignalOracle(
-        oob_oracle=OobOracle(
+        oob_oracle=oob.Coordinator(
             _ReadyEventStore(
                 EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
             ),
+            verification_oob.Oracle(),
             wait_seconds=0.0,
         )
     )
@@ -206,6 +211,98 @@ def test_content_delta_pair_rejects_request_echo() -> None:
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.grounded is False
     assert "echoed request field" in verdict.rationale
+
+
+@pytest.mark.parametrize(
+    ("response_path", "sink_type", "expected"),
+    [
+        ("request.query", "interpreter", VerdictStatus.UNSCOREABLE),
+        ("response.query", "", VerdictStatus.UNSCOREABLE),
+        ("response.query", "   ", VerdictStatus.UNSCOREABLE),
+        ("response.QUERY", "interpreter", VerdictStatus.FAIL),
+    ],
+)
+def test_content_delta_preserves_echo_and_sink_precedence(
+    response_path: str, sink_type: str, expected: VerdictStatus
+) -> None:
+    pair = ObservationPair(
+        control=_observation(response_tree=((response_path, ("before",)),)),
+        treatment=_observation(response_tree=((response_path, ("after",)),)),
+        witness_path=".QuErY.",
+    )
+
+    verdict = WitnessSignalOracle().evaluate_pair(
+        _invariant(duration(Atom(value="action:search"), Atom(value=100))),
+        pair,
+        method_id="search",
+        probe_fields=("QUERY",),
+        sink_types={"query": sink_type},
+    )
+
+    assert verdict.status is expected
+    assert verdict.grounded is (expected is VerdictStatus.FAIL)
+    if expected is VerdictStatus.UNSCOREABLE:
+        assert verdict.rationale == "witness path is only an echoed request field"
+
+
+@pytest.mark.parametrize(
+    ("control_value", "treatment_value", "expected"),
+    [
+        ("absent", ("known-content",), VerdictStatus.FAIL),
+        (("known-content",), ("known-content",), VerdictStatus.PASS),
+        ("absent", "prefix-known-content-suffix", VerdictStatus.PASS),
+    ],
+)
+def test_known_content_pair_requires_exact_selected_treatment_only_content(
+    control_value: JsonValue, treatment_value: JsonValue, expected: VerdictStatus
+) -> None:
+    control = _observation(response_tree=(("response.File", control_value),))
+    treatment = _observation(
+        response_tree=(
+            ("response.File", treatment_value),
+            ("response.other", "known-content"),
+        ),
+        probe_marker="candidate",
+    )
+
+    verdict = WitnessSignalOracle().evaluate_known_content_pair(
+        _invariant(reached(Atom(value="action:read"), Atom(value="sink:file"))),
+        control,
+        treatment,
+        KnownContentWitness(content="known-content", response_path=".FILE."),
+        method_id="read",
+    )
+
+    assert verdict.status is expected
+    assert verdict.evidence_refs == (control.observation_id, treatment.observation_id)
+
+
+@pytest.mark.parametrize(
+    ("method_id", "marker", "rationale"),
+    [
+        ("other", None, "QDL norm action does not match the executed method"),
+        ("read", None, "treatment has no candidate marker"),
+        ("read", "candidate", "paired response evidence is incomplete"),
+    ],
+)
+def test_known_content_pair_preserves_diagnostic_order(
+    method_id: str, marker: str | None, rationale: str
+) -> None:
+    control = _observation(response_tree=(("response.file", "absent"),))
+    treatment = _observation(
+        response_tree=(("response.file", "known-content"),), probe_marker=marker
+    ).model_copy(update={"output": ResponseData(field_names=("not_available",))})
+
+    verdict = WitnessSignalOracle().evaluate_known_content_pair(
+        _invariant(reached(Atom(value="action:read"), Atom(value="sink:file"))),
+        control,
+        treatment,
+        KnownContentWitness(content="known-content"),
+        method_id=method_id,
+    )
+
+    assert verdict.status is VerdictStatus.UNSCOREABLE
+    assert verdict.rationale == rationale
 
 
 def test_latency_signal_uses_a_paired_baseline_without_sink_dispatch() -> None:
@@ -350,10 +447,11 @@ def test_router_scores_oob_without_production_class_dispatch(
         )
     )
     router = PrimitiveOracleRouter(
-        oob_oracle=OobOracle(
+        oob_oracle=oob.Coordinator(
             _ReadyEventStore(
                 EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
             ),
+            verification_oob.Oracle(),
             wait_seconds=0.0,
         )
     )

@@ -63,6 +63,7 @@ from cloud_dast.runtime.candidates.session import StepCandidateRunner
 from cloud_dast.runtime.differential.evidence import Store
 from cloud_dast.runtime.execution import BoundPathRunner
 from cloud_dast.runtime.execution.contracts import PrefilterResult
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignRoundState
 from cloud_dast.runtime.execution.terminal import PathAttempt
@@ -521,8 +522,7 @@ def _runner(
     return (
         assemble_runner(
             service,
-            events,
-            events,
+            EventProjection(events, events),
             grounded_oracle=grounded_oracle,
             primitive_oracle=primitive_oracle,
             fuzz_session_factory=fuzz_session_factory,
@@ -678,16 +678,15 @@ def test_path_runner_feeds_observation_back_to_grammar_generator(
     assert len(model.requests) == 2
     feedback = model.requests[1].context["execution_feedback"]
     attempt = feedback["attempts"][0]
-    # Without accepted field-role facts the request value is redacted before
-    # it reaches the model; the field name still guides the generator.
+    # The next candidate receives the bounded values from the executed request.
     assert attempt["evidence"]["request"]["values"][0]["name"] == "secret_id"
     assert (
-        attempt["evidence"]["request"]["values"][0]["value"]["evidence_encoding"]
-        == "redacted"
+        attempt["evidence"]["request"]["values"][0]["value"]
+        == dict(result.checks[0].request)["secret_id"]
     )
     response_leaf = attempt["evidence"]["response"]["leaves"][0]
     assert response_leaf["path"] == "error.message"
-    assert response_leaf["value"]["evidence_encoding"] == "redacted"
+    assert response_leaf["value"] == "resource not found"
 
 
 def test_fuzz_session_respects_campaign_check_budget(
@@ -3128,8 +3127,7 @@ def test_candidate_feedback_reads_only_its_receipt(
     checker = Ledger(target, TemplateGenerator(), AllowAllGuardrail(), events)
     runner = assemble_runner(
         checker,
-        events,
-        events,
+        EventProjection(events, events),
         fuzz_session_factory=factory,
         grounded_oracle=GroundedOutcomeOracle(),
         formal_repository=SimpleNamespace(

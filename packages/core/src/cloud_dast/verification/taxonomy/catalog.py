@@ -38,8 +38,7 @@ from cloud_dast.qdl.roles import (
     SEMANTIC_ROLE_NAMES,
     semantic_role_taxonomy,
 )
-from cloud_dast.verification.norm_view import NormView
-from cloud_dast.verification.norms import Primitive
+from cloud_dast.verification.norms import NormView, Primitive
 
 if TYPE_CHECKING:
     from cloud_dast.contracts.plan import InvariantProjection
@@ -275,6 +274,14 @@ class ClassCatalog:
     def get(self, class_id: str) -> ClassEntry | None:
         return self._by_id.get(class_id)
 
+    def _candidates(self, norm: NormView) -> tuple[ClassEntry, ...]:
+        return tuple(
+            entry
+            for entry in self.active_entries
+            if norm.effect_name in entry.effect_constructors
+            and norm.primitive in entry.primitives
+        )
+
     def candidates_for(self, invariant: InvariantProjection) -> tuple[ClassEntry, ...]:
         """Return active catalog entries that could classify one norm.
 
@@ -291,12 +298,7 @@ class ClassCatalog:
             return ()
         if norm is None:
             return ()
-        return tuple(
-            entry
-            for entry in self.active_entries
-            if norm.effect_name in entry.effect_constructors
-            and norm.primitive in entry.primitives
-        )
+        return self._candidates(norm)
 
     def classify(
         self,
@@ -313,12 +315,7 @@ class ClassCatalog:
         if norm is None:
             return None
 
-        candidates = tuple(
-            entry
-            for entry in self.active_entries
-            if norm.effect_name in entry.effect_constructors
-            and norm.primitive in entry.primitives
-        )
+        candidates = self._candidates(norm)
         if not candidates:
             return None
         return self._select_entry(
@@ -350,12 +347,7 @@ class ClassCatalog:
                 projected_facts,
             )
 
-        candidates = tuple(
-            entry
-            for entry in self.active_entries
-            if norm.effect_name in entry.effect_constructors
-            and norm.primitive in entry.primitives
-        )
+        candidates = self._candidates(norm)
         if not candidates:
             return self._build_deficit_classification(
                 ("missing_catalog_entry",),
@@ -430,10 +422,8 @@ class ClassCatalog:
         constrained = [
             entry for entry in matching if _has_fact_constraint(entry, norm.effect_name)
         ]
-        return sorted(
-            constrained or matching,
-            key=lambda entry: (-len(_constraint_count(entry)), entry.class_id),
-        )[0]
+        # Fact-constrained matches win; class ID breaks ties deterministically.
+        return min(constrained or matching, key=lambda entry: entry.class_id)
 
 
 def _entry_matches(
@@ -578,14 +568,6 @@ def _has_fact_constraint(entry: ClassEntry, effect_name: str) -> bool:
     if effect_name == "has" and entry.witness_roles:
         return True
     return effect_name == "reached" and bool(entry.sink_types)
-
-
-def _constraint_count(entry: ClassEntry) -> tuple[int, ...]:
-    return (
-        len(entry.input_roles),
-        len(entry.witness_roles),
-        len(entry.sink_types),
-    )
 
 
 DEFAULT_CATALOG = ClassCatalog()

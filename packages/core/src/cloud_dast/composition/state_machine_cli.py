@@ -14,8 +14,8 @@ from cloud_dast.infrastructure.neo4j.formal_repository import Neo4jFormalReposit
 from cloud_dast.qdl.state_machine_spec import (
     StateMachineSpecification,
 )
-from cloud_dast.verification.state_machine_ingestion import (
-    StateMachineIngestionService,
+from cloud_dast.runtime.ingestion import (
+    StateMachineImporter,
 )
 
 
@@ -37,7 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     session_factory = make_session_factory()
     repository = Neo4jFormalRepository(session_factory)
-    service = StateMachineIngestionService(
+    service = StateMachineImporter(
         repository,
         adapter_version=args.adapter_version,
     )

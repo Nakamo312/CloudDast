@@ -1,3 +1,5 @@
+from cloud_dast.runtime.execution.runner import EventProjection
+
 """Reactive proposals have no durable authority before campaign handoff."""
 
 import threading
@@ -157,7 +159,7 @@ def campaign(store, axis, runner=None, policy=None):
     )
     workflow = assemble_workflow(
         None,
-        Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,

@@ -176,6 +176,39 @@ def make_graph_slice() -> ServiceGraphSlice:
     )
 
 
+@pytest.mark.parametrize("attribute", ["minimum", "maximum"])
+def test_numeric_bound_conflict_preserves_atom_choices(attribute) -> None:
+    graph = ServiceGraphSlice(
+        service="catalog",
+        nodes=(
+            GraphNode(
+                node_id="method",
+                labels=("Method",),
+                properties={
+                    "method_id": "grpc:catalog.Get",
+                    "input_fields": [
+                        {"name": "limit", attribute: 1},
+                        {"name": "limit", attribute: 1.5},
+                    ],
+                },
+            ),
+        ),
+    )
+    projection = ContractProjector().project(graph)
+    assert len(projection.report.conflict) == 1
+    issue = projection.report.conflict[0]
+    assert issue.detail == f"field {attribute} has conflicting values"
+    assert issue.choices == tuple(
+        sorted(
+            [
+                canonical_json(Atom(value=1)),
+                canonical_json(Atom(value="1.5")),
+            ]
+        )
+    )
+    assert not projection.graph.facts_for(f"field_{attribute}")
+
+
 def test_golden_projection() -> None:
     projection = ContractProjector().project(make_graph_slice())
 

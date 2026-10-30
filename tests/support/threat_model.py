@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from cloud_dast.qdl.graph import Atom, QdlGraph, Struct
 from cloud_dast.qdl.roles import semantic_role_stride
-from cloud_dast.verification.threat_model import StrideView
+
+type StrideCategory = Literal["S", "T", "R", "I", "D", "E"]
+
+
+@dataclass(frozen=True, slots=True)
+class StrideView:
+    """One STRIDE row projected from QDL for test assertions."""
+
+    action: Atom
+    field: Struct | None = None
+    role: str | None = None
+    effect: Struct | None = None
+    categories: tuple[StrideCategory, ...] = ()
 
 
 def project_stride(graph: QdlGraph) -> tuple[StrideView, ...]:

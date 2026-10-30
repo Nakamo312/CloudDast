@@ -27,6 +27,7 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.events import DomainEvent
 from cloud_dast.runtime.budget import CallLimits
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.verification.differential.contracts import (
     DifferentialSpec,
@@ -92,7 +93,7 @@ def test_execute_step_pair_runs_isolated_export_data_legs() -> None:
         bus,
     )
     workflow = checker
-    runner = assemble_runner(workflow, bus, events)
+    runner = assemble_runner(workflow, EventProjection(bus, events))
     budget = CallLimits(2)
 
     control = _scenario("export-owner", "owner", "victim")

@@ -9,11 +9,12 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
+    explain_mismatch,
 )
 from cloud_dast.verification.oracles.trace import ObservationTrace
+from cloud_dast.verification.witness import response_is_incomplete
 
 
 class FieldExposureOracle:
@@ -30,7 +31,7 @@ class FieldExposureOracle:
         norm = NormView.from_invariant(invariant)
         if norm is None or norm.primitive != "response_field":
             return self._unscoreable("invariant is not a response-field QDL norm")
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         # Principal scoping follows alignment: an inapplicable method must not
@@ -78,7 +79,7 @@ class FieldExposureOracle:
                 )
 
         observation = trace[-1]
-        if _response_is_incomplete(observation):
+        if response_is_incomplete(observation):
             return self._unscoreable("target returned incomplete response evidence")
 
         exposed = _exposed_response_paths(observation, norm.forbidden_field)
@@ -199,23 +200,3 @@ def _scenario_runs_principal(scenario: ScenarioPosition, principal_id: str) -> b
         principal.principal_id == principal_id
         for principal in scenario.stand.principals
     )
-
-
-_INCOMPLETE_RESPONSE_PATHS = frozenset({"__truncated__", "not_available"})
-
-
-def _response_is_incomplete(observation: Observation) -> bool:
-    paths = {path for path, _ in observation.response_tree if _is_incomplete_path(path)}
-    output = observation.output
-    if output is not None:
-        paths.update(name for name, _ in output.fields if _is_incomplete_path(name))
-        paths.update(
-            name
-            for name in getattr(output, "field_names", ())
-            if _is_incomplete_path(name)
-        )
-    return bool(paths)
-
-
-def _is_incomplete_path(path: str) -> bool:
-    return path in _INCOMPLETE_RESPONSE_PATHS or path.endswith(".not_available")

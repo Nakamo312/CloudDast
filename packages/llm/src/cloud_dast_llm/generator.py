@@ -49,7 +49,7 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.verification.evidence import (
     build_execution_feedback_view,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.slices import (
     DEFAULT_SLICE_BUDGET,
     SliceBudget,

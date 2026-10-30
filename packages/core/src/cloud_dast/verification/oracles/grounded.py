@@ -12,11 +12,10 @@ from cloud_dast.model import (
     ScenarioPosition,
     VerdictStatus,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
+    explain_mismatch,
 )
-from cloud_dast.verification.scenarios.capability import missing_capabilities
 
 
 class GroundedOutcomeOracle:
@@ -59,7 +58,7 @@ class GroundedOutcomeOracle:
                 observation,
                 "transport or application error cannot be scored as a policy outcome",
             )
-        mismatch = action_alignment_rationale(norm.action_id, method.method_id)
+        mismatch = explain_mismatch(norm.action_id, method.method_id)
         if mismatch is not None:
             return self._unscoreable(observation, mismatch)
 
@@ -134,7 +133,7 @@ class GroundedOutcomeOracle:
                 "effective permissions are unknown",
             )
 
-        missing = missing_capabilities(method, scenario.stand.effective_permissions)
+        missing = method.permissions - scenario.stand.effective_permissions
         grounded_expected = AccessOutcome.DENIED if missing else AccessOutcome.ALLOWED
         if normative_outcome is not None and normative_outcome != grounded_expected:
             return (

@@ -13,7 +13,7 @@ from cloud_dast.qdl.graph import (
     canonical_json,
 )
 from cloud_dast.qdl.graph_ops import atom_value
-from cloud_dast.verification.norm_view import (
+from cloud_dast.verification.norms import (
     LEAD_NORM_PREFIX,
     NormView,
 )

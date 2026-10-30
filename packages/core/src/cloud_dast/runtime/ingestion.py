@@ -1,4 +1,4 @@
-"""Compose contract-graph ingestion into the canonical QDL repository."""
+"""Import contract graphs and state-machine specifications into canonical QDL."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 
 from cloud_dast.ports import ContractGraphRepository, FormalRepository
 from cloud_dast.qdl.graph import QdlGraph
+from cloud_dast.qdl.state_machine_spec import StateMachineSpecification
 from cloud_dast.verification.contract_projection import (
     ClassificationProfile,
     ContractProjector,
@@ -27,7 +28,7 @@ _RESERVED_SOURCE_PREFIXES = (
 
 
 @dataclass(frozen=True, slots=True)
-class FormalIngestionResult:
+class ContractSummary:
     """Summary of one deterministic contract-to-QDL ingestion."""
 
     service: str
@@ -41,7 +42,7 @@ class FormalIngestionResult:
     classification_unmapped: int = 0
 
 
-class QdlIngestionService:
+class ContractImporter:
     """Materialize a formal projection of an existing contract graph.
 
     The service is intentionally separate from the live threat-modeling path.
@@ -73,7 +74,7 @@ class QdlIngestionService:
         service: str,
         *,
         source_id: str | None = None,
-    ) -> FormalIngestionResult:
+    ) -> ContractSummary:
         """Project and persist one service contract slice."""
 
         normalized_service = service.strip()
@@ -112,7 +113,7 @@ class QdlIngestionService:
             mapping_report=mapping_report,
         )
 
-        return FormalIngestionResult(
+        return ContractSummary(
             service=normalized_service,
             source_id=logical_source_id,
             graph_hash=projection.graph.content_hash,
@@ -128,3 +129,72 @@ class QdlIngestionService:
         """Return the latest canonical graph for a source."""
 
         return self._repository.load(source_id)
+
+
+@dataclass(frozen=True, slots=True)
+class StateMachineSummary:
+    """Summary of one state-machine ingestion."""
+
+    service: str
+    source_id: str
+    graph_hash: str
+    state_count: int
+    action_count: int
+    transition_count: int
+    forbidden_state_count: int
+
+
+class StateMachineImporter:
+    """Persist a state-machine graph through the repository port."""
+
+    def __init__(
+        self,
+        repository: FormalRepository,
+        *,
+        adapter_version: str = "state-machine-v1",
+    ) -> None:
+        self._repository = repository
+        self._adapter_version = adapter_version
+
+    def ingest(
+        self,
+        service: str,
+        specification: StateMachineSpecification,
+        *,
+        source_id: str | None = None,
+    ) -> StateMachineSummary:
+        normalized_service = service.strip()
+        if not normalized_service:
+            raise ValueError("service must not be empty")
+
+        graph = specification.to_qdl_graph()
+        logical_source_id = source_id or f"state-machine:{normalized_service}"
+        self._repository.save(
+            logical_source_id,
+            graph,
+            provenance={
+                "service": normalized_service,
+                "source_kind": "declarative-state-machine",
+                "state_count": len(specification.states),
+                "action_count": len(specification.actions),
+                "transition_count": len(specification.transitions),
+                "forbidden_state_count": len(specification.forbidden_states),
+            },
+            adapter_version=self._adapter_version,
+            mapping_report={
+                "mapped": len(graph.facts),
+                "unmapped": (),
+                "ambiguous": (),
+                "conflict": (),
+            },
+        )
+
+        return StateMachineSummary(
+            service=normalized_service,
+            source_id=logical_source_id,
+            graph_hash=graph.content_hash,
+            state_count=len(specification.states),
+            action_count=len(specification.actions),
+            transition_count=len(specification.transitions),
+            forbidden_state_count=len(specification.forbidden_states),
+        )

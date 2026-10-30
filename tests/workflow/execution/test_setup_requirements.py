@@ -16,6 +16,7 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.runtime.execution.metadata import (
     irreversible_actions as _irreversible_actions,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
@@ -218,7 +219,7 @@ def test_multiple_object_refs_use_ordinary_qdl_steps_and_shared_budget(
         )
 
     service = Checker(target, TemplateGenerator(), AllowAllGuardrail(), events)
-    runner = assemble_runner(service, events, events)
+    runner = assemble_runner(service, EventProjection(events, events))
     budget = CallLimits(limit)
     result = runner.execute_round(
         LiveRequest(service="widgets", principal_id="actor", resource_id="context"),

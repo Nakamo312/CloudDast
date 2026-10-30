@@ -13,8 +13,6 @@ def _evidence(leaves: list[tuple[str, object]]) -> EvidenceView:
             }
         },
         original_digest="digest",
-        digest="digest",
-        truncated=False,
     )
 
 

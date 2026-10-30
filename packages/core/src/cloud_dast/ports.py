@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ContextManager, Literal, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, ContextManager, Literal, Protocol, TypeVar
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +23,7 @@ from cloud_dast.model import (
     JsonValue,
     MethodSpec,
     Observation,
+    PolicyVerdict,
     RequestSchema,
     ResourceState,
     ResponseSchema,
@@ -32,6 +33,9 @@ from cloud_dast.model import (
 from cloud_dast.model.events import ApprovalAuditRecord, DomainEvent, EventScope
 from cloud_dast.proposals import ProposalPromotionRequest, ProposalPromotionResult
 from cloud_dast.qdl.graph import QdlGraph
+
+if TYPE_CHECKING:
+    from cloud_dast.contracts.plan import InvariantProjection
 
 MAX_MODEL_CHECKS = 16
 MAX_MODEL_PROMPT_BYTES = 1024 * 1024
@@ -198,6 +202,20 @@ class EvidenceChannel(Protocol):
     def block(self, reason: str) -> None: ...
 
     def blocked_reason(self) -> str | None: ...
+
+
+class OobEvaluator(Protocol):
+    """Evaluate OOB evidence and inspect arrived callbacks without lifecycle hooks."""
+
+    def evaluate_policy(
+        self,
+        invariant: InvariantProjection,
+        trace: tuple[Observation, ...],
+        *,
+        method_id: str | None = None,
+    ) -> PolicyVerdict: ...
+
+    def observe(self, marker: str) -> EvidenceEvent | None: ...
 
 
 class GroundingCache(Protocol):
@@ -531,6 +549,7 @@ __all__ = [
     "Invocation",
     "InvocationRepository",
     "MethodRepository",
+    "OobEvaluator",
     "OobUrlFactory",
     "Target",
     "TokenProvider",

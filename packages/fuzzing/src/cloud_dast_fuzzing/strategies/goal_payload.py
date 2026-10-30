@@ -26,7 +26,7 @@ from cloud_dast.model import (
     ScenarioPosition,
 )
 from cloud_dast.ports import OobUrlFactory
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 
 RUNTIME_PLACEHOLDERS = (PROBE_MARKER_PLACEHOLDER, OOB_URL_PLACEHOLDER)
 _STRUCTURED_GENERATORS = frozenset({"grammar", "textual"})

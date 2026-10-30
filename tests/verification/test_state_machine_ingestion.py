@@ -8,7 +8,7 @@ from cloud_dast.qdl.state_machine_spec import (
     StateMachineSpecification,
     StateMachineTransition,
 )
-from cloud_dast.verification.state_machine_ingestion import StateMachineIngestionService
+from cloud_dast.runtime.ingestion import StateMachineImporter
 
 
 class FakeRepository:
@@ -68,7 +68,7 @@ def specification() -> StateMachineSpecification:
 
 def test_state_machine_ingestion_saves_qdl_graph() -> None:
     repository = FakeRepository()
-    service = StateMachineIngestionService(repository)
+    service = StateMachineImporter(repository)
 
     result = service.ingest("orders", specification())
 
@@ -83,7 +83,7 @@ def test_state_machine_ingestion_saves_qdl_graph() -> None:
 
 
 def test_state_machine_ingestion_rejects_empty_service() -> None:
-    service = StateMachineIngestionService(FakeRepository())
+    service = StateMachineImporter(FakeRepository())
 
     with pytest.raises(ValueError, match="service must not be empty"):
         service.ingest("   ", specification())
@@ -203,7 +203,7 @@ def test_alias_duplicate_actions_and_transitions_collapse() -> None:
     )
     repository = FakeRepository()
 
-    result = StateMachineIngestionService(repository).ingest("orders", spec)
+    result = StateMachineImporter(repository).ingest("orders", spec)
 
     assert result.action_count == 1
     assert result.transition_count == 1

@@ -310,9 +310,8 @@ def build_slice(
 
     selected, depths = _expand(graph, seed_keys, declarations, budget.max_depth)
     rules = _related_rules(graph, seed_keys, selected)
-    # Reserve the exact rendered evidence and JSON envelope, including any
-    # expansion caused by model-facing redaction. Evidence remains local and
-    # intact; an evidence-only overflow is an explicit budget deficit.
+    # Reserve the exact rendered evidence and JSON envelope. The bounded
+    # evidence stays intact; evidence-only overflow is a budget deficit.
     empty_context = BoundedSlice(graph=_EMPTY_SLICE_GRAPH, evidence=evidence).context()
     context_tokens = estimate_tokens(
         empty_context, bytes_per_token=budget.bytes_per_token
@@ -350,7 +349,7 @@ def build_slice(
         depth=max(kept_depths.values(), default=0),
         token_estimate=token_estimate,
         truncated=truncated,
-        slice_hash=_slice_hash(slice_graph, evidence, resolved_actions),
+        slice_hash=fingerprint(slice_graph, evidence, resolved_actions),
     )
 
 
@@ -711,7 +710,7 @@ def _graph_tokens(
     )
 
 
-def _slice_hash(
+def fingerprint(
     graph: QdlGraph,
     evidence: EvidenceView | None,
     actions: Sequence[str],
@@ -792,4 +791,5 @@ __all__ = [
     "build_sibling_action_slice",
     "build_slice",
     "estimate_tokens",
+    "fingerprint",
 ]

@@ -40,13 +40,14 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.runtime.campaign.replay import EventGraph
 from cloud_dast.runtime.execution import BoundPathRunner
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics, IntentState
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
-from cloud_dast.verification.coverage import build_coverage_matrix
+from cloud_dast.verification.coverage import build_matrix
 from cloud_dast.verification.evidence_facts import verified_fact
 from cloud_dast.verification.oracles.grounded import (
     GroundedOutcomeOracle,
@@ -130,8 +131,7 @@ def _runner(
     )
     return assemble_runner(
         checker,
-        events,
-        events,
+        EventProjection(events, events),
         grounded_oracle=GroundedOutcomeOracle(),
         primitive_oracle=PrimitiveOracleRouter(),
         metrics=metrics,
@@ -446,7 +446,7 @@ def test_historical_coverage_events_do_not_close_current_run() -> None:
         baseline_event_ids=frozenset(event.event_id for event in historical_events),
     )
 
-    historical_matrix = build_coverage_matrix(
+    historical_matrix = build_matrix(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=historical_events,
@@ -471,7 +471,7 @@ def test_historical_coverage_events_do_not_close_current_run() -> None:
         current_observation, campaign_id="campaign:current", run_id="run:current"
     )
 
-    current_matrix = build_coverage_matrix(
+    current_matrix = build_matrix(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=current_events,

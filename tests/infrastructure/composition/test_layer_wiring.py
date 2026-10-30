@@ -19,6 +19,7 @@ from cloud_dast.ports import (
     Guardrail,
     InvocationRepository,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.grounding.lifecycle import RunCoordinator
 
 
@@ -262,7 +263,7 @@ def test_retained_execution_services_do_not_retain_their_runner():
     checker = Checker(
         _target, SimpleNamespace(generate=lambda *args: ()), AllowAllGuardrail()
     )
-    runner = assemble_runner(checker, Mock(), _EmptyEventStore())
+    runner = assemble_runner(checker, EventProjection(Mock(), _EmptyEventStore()))
     retained_services = tuple(vars(runner).values())
     reference = weakref.ref(runner)
     was_enabled = gc.isenabled()

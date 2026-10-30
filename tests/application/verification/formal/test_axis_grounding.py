@@ -746,7 +746,7 @@ def test_staged_norms_see_semantic_facts_and_evidence() -> None:
     assert {"has", "reaches", "exposes"} <= norms_predicates
     evidence_leaf = norms_requests[0].context["evidence"]["response"]["leaves"][0]
     assert evidence_leaf["path"] == "email"
-    assert evidence_leaf["value"]["evidence_encoding"] == "redacted"
+    assert evidence_leaf["value"] == "alice@example.com"
 
 
 def test_norms_slice_contains_campaign_policy_facts() -> None:

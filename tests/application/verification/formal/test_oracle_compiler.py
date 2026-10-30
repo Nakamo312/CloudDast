@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, changed
-from cloud_dast.verification.norm_view import NormView
-from cloud_dast.verification.norms import NormCompiler
+from cloud_dast.verification.norms import NormCompiler, NormView
 
 
 def test_norm_compilation_preserves_original_fact() -> None:

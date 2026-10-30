@@ -17,10 +17,12 @@ from cloud_dast.qdl.graph import (
     Fact,
     Predicate,
     QdlGraph,
+    allowed,
     changed,
     input_field,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
+from cloud_dast.runtime.execution.runner import EventProjection
 
 
 class _EventLog:
@@ -71,7 +73,7 @@ def test_model_fail_does_not_raise_a_finding() -> None:
     invariant = _invariant()
     observation = _observation()
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
 
     result = evaluator.evaluate(_execution(invariant, observation), {"i": invariant})
 
@@ -82,7 +84,7 @@ def test_grounded_deterministic_fail_raises_a_finding() -> None:
     invariant = _invariant()
     observation = _observation()
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
     execution = _execution(invariant, observation)
     execution = ExecutionResult(
         observations=execution.observations,
@@ -94,6 +96,7 @@ def test_grounded_deterministic_fail_raises_a_finding() -> None:
                 confidence=1.0,
                 rationale="IAM expected denial but the target allowed the call",
                 model_id="grounded-outcome",
+                evidence_refs=(observation.observation_id,),
                 deterministic=True,
                 grounded=True,
             )
@@ -103,8 +106,8 @@ def test_grounded_deterministic_fail_raises_a_finding() -> None:
     result = evaluator.evaluate(execution, {"i": invariant})
 
     assert len(result.findings) == 1
-    assert result.findings[0].vulnerability_class == "classification_deficit"
-    assert result.findings[0].classification_deficits == ("missing_norm_fact",)
+    assert result.findings[0].vulnerability_class == "function_level_authz"
+    assert "missing_norm_fact" not in result.findings[0].classification_deficits
     assert result.replayed_findings == result.findings
 
 
@@ -112,7 +115,7 @@ def test_changed_finding_receives_qdl_classifications() -> None:
     invariant = _changed_invariant()
     observation = _observation()
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
     execution = _execution(invariant, observation)
     execution = ExecutionResult(
         observations=execution.observations,
@@ -124,6 +127,7 @@ def test_changed_finding_receives_qdl_classifications() -> None:
                 confidence=1.0,
                 rationale="forbidden resource field changed between paired reads",
                 model_id="differential",
+                evidence_refs=(observation.observation_id,),
                 deterministic=True,
                 grounded=True,
             )
@@ -148,7 +152,7 @@ def test_changed_finding_without_role_fact_receives_deficit() -> None:
     invariant = _changed_invariant()
     observation = _observation()
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
     execution = _execution(invariant, observation)
     execution = ExecutionResult(
         observations=execution.observations,
@@ -160,6 +164,7 @@ def test_changed_finding_without_role_fact_receives_deficit() -> None:
                 confidence=1.0,
                 rationale="forbidden resource field changed between paired reads",
                 model_id="differential",
+                evidence_refs=(observation.observation_id,),
                 deterministic=True,
                 grounded=True,
             )
@@ -187,6 +192,14 @@ def _invariant() -> InvariantProjection:
         norm_id="t",
         statement="caller must be denied",
         severity=Severity.HIGH,
+        norm_fact=Fact(
+            context=Context.ACCEPTED,
+            predicate=Predicate.from_name("prevents"),
+            args=(
+                Atom(value="norm:t"),
+                allowed(Atom(value="action:grpc:test.Service.Method")),
+            ),
+        ),
     )
 
 

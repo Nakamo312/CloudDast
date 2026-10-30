@@ -10,7 +10,8 @@ from cloud_dast.model import (
     ScenarioPosition,
     VerdictStatus,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.ports import OobEvaluator
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.differential import (
     DifferentialOracle,
 )
@@ -22,7 +23,6 @@ from cloud_dast.verification.oracles.grounded import (
 )
 from cloud_dast.verification.oracles.latency import LatencyOracle
 from cloud_dast.verification.oracles.marker import MarkerOracle
-from cloud_dast.verification.oracles.oob import OobOracle
 from cloud_dast.verification.oracles.roles import WitnessRolePolicy
 from cloud_dast.verification.oracles.sequence import SequenceOracle
 from cloud_dast.verification.oracles.trace import ObservationTrace
@@ -46,7 +46,7 @@ class PrimitiveOracleRouter:
         latency_oracle: LatencyOracle | None = None,
         marker_oracle: MarkerOracle | None = None,
         differential_oracle: DifferentialOracle | None = None,
-        oob_oracle: OobOracle | None = None,
+        oob_oracle: OobEvaluator | None = None,
         sequence_oracle: SequenceOracle | None = None,
         witness_oracle: WitnessSignalOracle | None = None,
         witness_policy: WitnessRolePolicy | None = None,
@@ -56,12 +56,11 @@ class PrimitiveOracleRouter:
         self._latency = latency_oracle or LatencyOracle()
         self._marker = marker_oracle or MarkerOracle(witness_policy=witness_policy)
         self._differential = differential_oracle or DifferentialOracle()
-        self._oob = oob_oracle
         self._sequence = sequence_oracle or SequenceOracle()
         self._witness = witness_oracle or WitnessSignalOracle(
             latency_oracle=self._latency,
             marker_oracle=self._marker,
-            oob_oracle=self._oob,
+            oob_oracle=oob_oracle,
         )
 
     def evaluate_policy(
@@ -148,17 +147,6 @@ class PrimitiveOracleRouter:
             read_after=read_after,
             method_id=method.method_id,
         )
-
-    def reevaluate_oob_pending(
-        self,
-        *,
-        timeout: float | None = None,
-    ) -> dict[str, PolicyVerdict]:
-        """Sweep timed-out OOB candidates through the configured oracle."""
-
-        if self._oob is None:
-            return {}
-        return self._oob.reevaluate_pending(timeout=timeout)
 
     @staticmethod
     def _unscoreable(rationale: str) -> PolicyVerdict:

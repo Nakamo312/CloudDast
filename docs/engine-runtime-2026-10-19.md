@@ -99,6 +99,7 @@ RunScope providers:
   bound_path_runner
   campaign_metrics
   event_bus
+  event_projection
   evidence_channel
   field_exposure_oracle
   finding_evaluator
@@ -120,6 +121,7 @@ RunScope providers:
   marker_oracle
   minimal_seed_generator
   observation_projector
+  oob_coordinator
   oob_oracle
   oob_url_factory
   payload_compiler

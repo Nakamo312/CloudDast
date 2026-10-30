@@ -28,6 +28,7 @@ from cloud_dast.runtime import (
     reference_projection,
     resource_projection,
 )
+from cloud_dast.runtime.campaign import evaluation as campaign_evaluation
 from cloud_dast.runtime.campaign.state import RuntimeState
 from cloud_dast.runtime.candidates import session as step_candidates
 from cloud_dast.runtime.deficits import Deficit as RuntimeDeficit
@@ -39,7 +40,6 @@ from cloud_dast.runtime.execution import view as execution_view
 from cloud_dast.verification import (
     action_runtime,
     coverage_models,
-    finding_evaluator,
     invariant_projection,
     norm_coverage,
 )
@@ -680,14 +680,12 @@ def test_vulnerability_taxonomy_is_verification_owned() -> None:
     assert not (SOURCE_ROOT / "application/verification/classes.yaml").exists()
 
 
-def test_finding_evaluation_and_result_contracts_are_application_owned() -> None:
-    for module in (execution_results, finding_evaluator):
+def test_finding_evaluation_and_contracts_do_not_import_legacy_workflow() -> None:
+    for module in (execution_results, campaign_evaluation):
         assert not any(
             dependency.startswith("cloud_dast.workflow")
             for dependency in _imported_modules(Path(module.__file__))
         )
-
-    assert not (SOURCE_ROOT / "workflow/execution/finding_evaluator.py").exists()
 
 
 def test_identity_attachment_is_runtime_owned() -> None:
@@ -1239,27 +1237,12 @@ def test_qdl_graph_state_has_facts_owner_and_stable_facade() -> None:
     assert not _module_owns_class(graph, "QdlGraph")
 
 
-def test_state_machine_spec_and_ingestion_have_split_owners() -> None:
+def test_state_machine_spec_has_qdl_owner() -> None:
     from cloud_dast.qdl.state_machine_spec import (
         StateMachineSpecification,
     )
-    from cloud_dast.verification.state_machine_ingestion import (
-        StateMachineIngestionService,
-    )
 
     assert StateMachineSpecification.__module__ == ("cloud_dast.qdl.state_machine_spec")
-    assert (
-        StateMachineIngestionService.__module__
-        == "cloud_dast.verification.state_machine_ingestion"
-    )
-    ingestion_modules = _imported_modules(
-        SOURCE_ROOT / "verification/state_machine_ingestion.py"
-    )
-    assert (SOURCE_ROOT / "qdl/state_machine_spec.py").exists()
-    assert "cloud_dast.qdl.state_machine_spec" in ingestion_modules
-    assert not (
-        SOURCE_ROOT / "application/verification/formal/state_machine_ingestion.py"
-    ).exists()
 
 
 def test_threat_compiler_has_qdl_owner() -> None:
@@ -1313,8 +1296,7 @@ def test_qdl_and_verification_projection_owners_are_single() -> None:
     from cloud_dast.qdl.field_roles import FieldRolePolicy
     from cloud_dast.qdl.roles import SemanticRole
     from cloud_dast.verification.evidence import EvidenceView
-    from cloud_dast.verification.norm_view import NormView
-    from cloud_dast.verification.norms import NormCompiler
+    from cloud_dast.verification.norms import NormCompiler, NormView
     from cloud_dast.verification.slices import BoundedSlice
 
     assert FieldRolePolicy.__module__ == "cloud_dast.qdl.field_roles"
@@ -1322,7 +1304,7 @@ def test_qdl_and_verification_projection_owners_are_single() -> None:
     assert FieldCoupling.__module__ == "cloud_dast.couplings"
     assert NormCompiler.__module__ == "cloud_dast.verification.norms"
     assert SemanticRole.__module__ == "cloud_dast.qdl.roles"
-    assert NormView.__module__ == "cloud_dast.verification.norm_view"
+    assert NormView.__module__ == "cloud_dast.verification.norms"
     assert EvidenceView.__module__ == "cloud_dast.verification.evidence"
     assert BoundedSlice.__module__ == "cloud_dast.verification.slices"
     for old_path in (
@@ -1332,7 +1314,8 @@ def test_qdl_and_verification_projection_owners_are_single() -> None:
         "application/verification/oracles/norm_view.py",
     ):
         assert not (SOURCE_ROOT / old_path).exists()
-    assert (SOURCE_ROOT / "verification/norm_view.py").exists()
+    assert (SOURCE_ROOT / "verification/norms.py").exists()
+    assert not (SOURCE_ROOT / "verification/norm_view.py").exists()
     assert not (SOURCE_ROOT / "qdl/norm_view.py").exists()
 
 

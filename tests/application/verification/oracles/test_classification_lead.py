@@ -12,7 +12,7 @@ from cloud_dast.qdl.graph import (
     field,
     has,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles import (
     ClassificationLeadOracle,
     evaluate_classification_leads,

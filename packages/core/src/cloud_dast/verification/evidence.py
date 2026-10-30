@@ -7,19 +7,16 @@ it as structured JSON in ``ModelRequest.context``; it never becomes the
 source of truth.  Recorded verdicts may be attached as execution-feedback
 metadata, but security decisions remain deterministic oracles.
 
-Model-facing redaction is grounded in accepted QDL field roles: a value
-survives only when the supplied :class:`FieldRolePolicy` carries an accepted
-``has(field, object_ref | replay_safe)`` fact for the action that produced
-it.  Fields without a fact are redacted and reported as typed deficits.
+Model contexts retain captured values within the byte, leaf and string budgets.
+This projection does not decide which facts or security verdicts are accepted.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from cloud_dast.contracts.feedback import ExecutionFeedback
@@ -29,18 +26,14 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.evidence import response_tree_digest
 from cloud_dast.ports import EvidenceEvent
-from cloud_dast.qdl.field_roles import (
-    FieldDirection,
-    FieldRolePolicy,
-)
 from cloud_dast.verification.differential.report import DiffReport
 
-logger = logging.getLogger("cloud_dast.formal.evidence_view")
+_RESERVED_BUDGET_BYTES = 1024
 
 
 @dataclass(frozen=True, slots=True)
 class EvidenceBudget:
-    """Upper bounds for one model-facing evidence projection."""
+    """Bounds for model-facing evidence, including a minimum 1 KiB envelope."""
 
     max_leaves: int = 1024
     max_string_chars: int = 1024
@@ -53,36 +46,37 @@ class EvidenceBudget:
             raise ValueError("max_string_chars must be positive")
         if self.max_total_bytes <= 0:
             raise ValueError("max_total_bytes must be positive")
+        if self.max_total_bytes < _RESERVED_BUDGET_BYTES:
+            raise ValueError("max_total_bytes must be at least 1024")
 
 
 DEFAULT_EVIDENCE_BUDGET = EvidenceBudget()
 _TRUNCATED_PREVIEW_CHARS = 256
 _BINARY_PREVIEW_CHARS = 128
-_RESERVED_BUDGET_BYTES = 1024
-_REDACTION_POLICY = "accepted-field-roles-and-shape-only"
 
 
 @dataclass(frozen=True, slots=True)
 class EvidenceView:
-    """A bounded JSON projection with original and rendered digests."""
+    """One bounded JSON projection with original and rendered digests."""
 
     data: Mapping[str, Any]
     original_digest: str
-    digest: str
-    truncated: bool
-    field_roles: FieldRolePolicy | None = None
+    digest: str = field(init=False)
+    truncated: bool = field(init=False)
+
+    def __post_init__(self) -> None:
+        data = _json_copy(self.data)
+        _enforce_budget(data)
+        object.__setattr__(self, "data", data)
+        object.__setattr__(self, "digest", _sha256(_canonical_json(data)))
+        object.__setattr__(
+            self, "truncated", bool(data.get("budget", {}).get("truncated", False))
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the redacted, JSON-safe model context.
+        """Return a detached, JSON-safe copy of the bounded evidence."""
 
-        The in-memory projection keeps bounded values for deterministic
-        consumers such as secret-shape classification.  Model rendering applies
-        a stricter projection: arbitrary request, response, trace, and OOB values
-        are replaced by content hashes; only fields with accepted replay-safe
-        roles and shape metadata remain.
-        """
-
-        return _model_view(self.data, field_roles=self.field_roles)
+        return _json_copy(self.data)
 
     model_dump = to_dict
 
@@ -120,12 +114,11 @@ def build_evidence_view(
     oob_events: Sequence[EvidenceEvent] = (),
     label: str = "observation",
     budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-    field_roles: FieldRolePolicy | None = None,
 ) -> EvidenceView:
     """Build one bounded observation view.
 
-    Raw values remain available to deterministic in-process consumers through
-    ``data``; ``to_dict`` applies the model-facing redaction policy.
+    Values remain available to local consumers and model contexts under the
+    same technical budgets.
     """
 
     raw = _observation_context(
@@ -134,7 +127,7 @@ def build_evidence_view(
         observation=observation,
         oob_events=oob_events,
     )
-    return _bounded_view(raw, budget, field_roles=field_roles)
+    return _bounded_view(raw, budget)
 
 
 def build_paired_evidence_view(
@@ -146,7 +139,6 @@ def build_paired_evidence_view(
     report: DiffReport | None = None,
     oob_events: Sequence[EvidenceEvent] = (),
     budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-    field_roles: FieldRolePolicy | None = None,
 ) -> EvidenceView:
     """Build a control/treatment view with value-bearing path differences."""
 
@@ -174,14 +166,13 @@ def build_paired_evidence_view(
     }
     if report is not None:
         raw["diff"] = _diff_context(control, treatment, report)
-    return _bounded_view(raw, budget, field_roles=field_roles)
+    return _bounded_view(raw, budget)
 
 
 def build_execution_feedback_view(
     feedback: ExecutionFeedback,
     *,
     budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-    field_roles: FieldRolePolicy | None = None,
 ) -> EvidenceView:
     """Build a bounded history of executed candidates and their outcomes.
 
@@ -210,7 +201,7 @@ def build_execution_feedback_view(
             for index, entry in enumerate(feedback.entries)
         ],
     }
-    return _bounded_view(raw, budget, field_roles=field_roles)
+    return _bounded_view(raw, budget)
 
 
 def _observation_context(
@@ -408,8 +399,6 @@ def _response_values(observation: Observation) -> dict[str, Any]:
 def _bounded_view(
     raw: Mapping[str, Any],
     budget: EvidenceBudget,
-    *,
-    field_roles: FieldRolePolicy | None = None,
 ) -> EvidenceView:
     original_json = _canonical_json(raw)
     original_digest = _sha256(original_json)
@@ -428,21 +417,13 @@ def _bounded_view(
         "original_bytes": len(original_json.encode("utf-8")),
         "truncated": False,
         "dropped_leaves": dropped,
-        "redaction": {
-            "version": 1,
-            "policy": _REDACTION_POLICY,
-        },
     }
     bounded["budget"] = metadata
     _enforce_total_budget(bounded, budget, initial_dropped=dropped)
     metadata["truncated"] = bool(metadata["truncated"] or dropped)
-    model_view = _model_view(bounded, field_roles=field_roles)
     return EvidenceView(
         data=bounded,
         original_digest=original_digest,
-        digest=_sha256(_canonical_json(model_view)),
-        truncated=bool(model_view["budget"]["truncated"]),
-        field_roles=field_roles,
     )
 
 
@@ -587,7 +568,24 @@ def _enforce_total_budget(
     target = max(0, budget.max_total_bytes - _RESERVED_BUDGET_BYTES)
     dropped = initial_dropped
 
-    while len(_canonical_json(value).encode("utf-8")) > target:
+    while (
+        len(_canonical_json(value).encode("utf-8")) > target
+        or len(
+            json.dumps(
+                {
+                    **value,
+                    "budget": {
+                        **metadata,
+                        "truncated": dropped > 0,
+                        "dropped_leaves": dropped,
+                    },
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+        )
+        > budget.max_total_bytes
+    ):
         removed = _drop_one_droppable_leaf(value)
         if removed:
             dropped += 1
@@ -607,6 +605,29 @@ def _enforce_total_budget(
         )
         metadata["truncated"] = True
         metadata["dropped_leaves"] = dropped
+        if (
+            len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+            > budget.max_total_bytes
+        ):
+            preview = value["preview"]
+            value["preview"] = ""
+            if (
+                len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+                > budget.max_total_bytes
+            ):
+                raise ValueError("evidence budget cannot fit its metadata")
+            low, high = 0, len(preview)
+            while low < high:
+                middle = (low + high + 1) // 2
+                value["preview"] = preview[:middle]
+                if (
+                    len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+                    <= budget.max_total_bytes
+                ):
+                    low = middle
+                else:
+                    high = middle - 1
+            value["preview"] = preview[:low]
         return
 
     metadata["truncated"] = dropped > 0
@@ -658,277 +679,34 @@ def _json_copy(value: Any) -> Any:
     return json.loads(_canonical_json(value))
 
 
-def _redact_for_model(
-    value: Any,
-    *,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    gaps: set[tuple[str | None, str, str]],
-) -> Any:
-    """Apply the model-facing redaction policy to a bounded JSON value."""
+def _enforce_budget(value: dict[str, Any]) -> None:
+    """Validate declared metadata and normalize an oversized manual view once."""
 
-    if isinstance(value, Mapping):
-        return _redact_mapping(value, field_roles=field_roles, action=action, gaps=gaps)
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return [
-            _redact_for_model(
-                item,
-                field_roles=field_roles,
-                action=action,
-                gaps=gaps,
-            )
-            for item in value
-        ]
-    return value
-
-
-def _redact_mapping(
-    value: Mapping[str, Any],
-    *,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    gaps: set[tuple[str | None, str, str]],
-) -> dict[str, Any]:
-    is_evidence_event = "channel" in value and "correlation_id" in value
-    local_action = action
-    for action_key in ("method_id", "action_id"):
-        candidate = value.get(action_key)
-        if isinstance(candidate, str):
-            local_action = candidate
-            break
-
-    redacted: dict[str, Any] = {}
-    for key, item in value.items():
-        if key == "values" and _is_named_value_list(item):
-            redacted[key] = [
-                _redact_named_value(
-                    entry,
-                    field_roles=field_roles,
-                    action=local_action,
-                    gaps=gaps,
-                )
-                for entry in item
-            ]
-        elif key == "fields" and _is_named_value_list(item):
-            redacted[key] = [
-                _redact_named_value(
-                    entry,
-                    field_roles=field_roles,
-                    action=local_action,
-                    gaps=gaps,
-                )
-                for entry in item
-            ]
-        elif key in {"resource_before", "resource_after"} and _is_named_value_list(
-            item
-        ):
-            redacted[key] = [
-                _redact_named_value(
-                    entry,
-                    field_roles=field_roles,
-                    action=local_action,
-                    gaps=gaps,
-                )
-                for entry in item
-            ]
-        elif key in {"leaves", "safe_fields"} and _is_path_value_list(item):
-            redacted[key] = [
-                _redact_path_value(
-                    entry,
-                    field_roles=field_roles,
-                    action=local_action,
-                    gaps=gaps,
-                )
-                for entry in item
-            ]
-        elif key in {"control_value", "treatment_value"}:
-            redacted[key] = _redact_diff_value(
-                value,
-                key,
-                field_roles=field_roles,
-                action=local_action,
-                gaps=gaps,
-            )
-        elif (
-            key in {"error_reason", "response_summary", "preview"} and item is not None
-        ):
-            # Diagnostics are witness values (error(action)), not field-role
-            # declarations. Keep them local; no accepted field role releases them.
-            redacted[key] = _redacted_value(item)
-        elif key == "source" and isinstance(item, str) and is_evidence_event:
-            redacted[key] = _redacted_value(item)
-        elif key == "attributes" and isinstance(item, Mapping) and is_evidence_event:
-            redacted[key] = {
-                name: _redacted_value(attribute) for name, attribute in item.items()
-            }
-        else:
-            redacted[key] = _redact_for_model(
-                item,
-                field_roles=field_roles,
-                action=local_action,
-                gaps=gaps,
-            )
-    return redacted
-
-
-def _is_named_value_list(value: object) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and all(
-            isinstance(item, Mapping)
-            and isinstance(item.get("name"), str)
-            and "value" in item
-            for item in value
-        )
-    )
-
-
-def _is_path_value_list(value: object) -> bool:
-    return (
-        isinstance(value, Sequence)
-        and not isinstance(value, (str, bytes))
-        and all(
-            isinstance(item, Mapping)
-            and isinstance(item.get("path"), str)
-            and "value" in item
-            for item in value
-        )
-    )
-
-
-def _redact_path_value(
-    value: Mapping[str, Any],
-    *,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    gaps: set[tuple[str | None, str, str]],
-) -> dict[str, Any]:
-    if _retain_field_value(
-        value["value"],
-        field_name=value["path"],
-        field_roles=field_roles,
-        action=action,
-        direction="output",
-        gaps=gaps,
-    ):
-        return dict(value)
-    return {**value, "value": _redacted_value(value["value"])}
-
-
-def _redact_named_value(
-    value: Mapping[str, Any],
-    *,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    gaps: set[tuple[str | None, str, str]],
-) -> dict[str, Any]:
-    if _retain_field_value(
-        value["value"],
-        field_name=value["name"],
-        field_roles=field_roles,
-        action=action,
-        direction="input",
-        gaps=gaps,
-    ):
-        return dict(value)
-    return {**value, "value": _redacted_value(value["value"])}
-
-
-def _redact_diff_value(
-    entry: Mapping[str, Any],
-    key: str,
-    *,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    gaps: set[tuple[str | None, str, str]],
-) -> Any:
-    value = entry[key]
-    if _retain_field_value(
-        value,
-        field_name=entry["path"],
-        field_roles=field_roles,
-        action=action,
-        direction="output",
-        gaps=gaps,
-    ):
-        return value
-    return _redacted_value(value)
-
-
-def _retain_field_value(
-    value: object,
-    *,
-    field_name: str,
-    field_roles: FieldRolePolicy | None,
-    action: str | None,
-    direction: FieldDirection,
-    gaps: set[tuple[str | None, str, str]],
-) -> bool:
-    """Retain a value only on an accepted replay-safe role fact."""
-
-    if field_roles is not None and field_roles.roles(
-        action,
-        field_name,
-        direction=direction,
-    ):
-        return field_roles.retains(
-            action,
-            field_name,
-            direction=direction,
-        ) and (value is None or isinstance(value, str))
-    gaps.add((action, direction, field_name))
-    return False
-
-
-def _redacted_value(value: object) -> dict[str, Any]:
-    canonical = _canonical_json(value)
-    return {
-        "evidence_encoding": "redacted",
-        "sha256": _sha256(canonical),
-        "length": len(canonical.encode("utf-8")),
-    }
-
-
-def _enforce_model_budget(value: object) -> None:
-    """Re-enforce the byte budget after redaction expands leaf values."""
-
-    if not isinstance(value, dict):
+    if "budget" not in value:
         return
-    metadata = value.get("budget")
-    if not isinstance(metadata, Mapping):
-        return
+    metadata = value["budget"]
     try:
+        if not isinstance(metadata, dict):
+            raise TypeError
         budget = EvidenceBudget(
             max_leaves=int(metadata["max_leaves"]),
             max_string_chars=int(metadata["max_string_chars"]),
             max_total_bytes=int(metadata["max_total_bytes"]),
         )
-        initial_dropped = int(metadata["dropped_leaves"])
-    except (KeyError, TypeError, ValueError):
-        return
-    _enforce_total_budget(value, budget, initial_dropped=initial_dropped)
-
-
-def _model_view(
-    data: Mapping[str, Any],
-    *,
-    field_roles: FieldRolePolicy | None,
-) -> dict[str, Any]:
-    gaps: set[tuple[str | None, str, str]] = set()
-    redacted = _redact_for_model(
-        _json_copy(data),
-        field_roles=field_roles,
-        action=None,
-        gaps=gaps,
+        dropped = int(metadata["dropped_leaves"])
+        if dropped < 0 or not isinstance(metadata.get("truncated", False), bool):
+            raise ValueError
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise ValueError("invalid evidence budget metadata") from None
+    metadata.update(
+        max_leaves=budget.max_leaves,
+        max_string_chars=budget.max_string_chars,
+        max_total_bytes=budget.max_total_bytes,
+        dropped_leaves=dropped,
+        truncated=metadata.get("truncated", False),
     )
-    _enforce_model_budget(redacted)
-    if gaps:
-        logger.warning(
-            "evidence values redacted without accepted field roles: %s",
-            ",".join(
-                f"{direction}:{action or 'unknown'}:{field_name}"
-                for action, direction, field_name in sorted(gaps, key=str)
-            ),
-        )
-    return redacted
+    if (
+        len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        > budget.max_total_bytes
+    ):
+        _enforce_total_budget(value, budget, initial_dropped=dropped)

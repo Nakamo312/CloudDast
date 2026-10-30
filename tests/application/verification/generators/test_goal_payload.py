@@ -24,12 +24,13 @@ from cloud_dast.qdl.graph import (
     external_call,
     reached,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.runtime.candidates.feedback import (
     ExecutionFeedback,
     ExecutionFeedbackEntry,
 )
 from cloud_dast.runtime.execution.checks import run_check
-from cloud_dast.verification.oracles import OobOracle
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast_fuzzing import GoalPayloadGenerator
 from cloud_dast_fuzzing.corpus import PayloadCorpusStore
 
@@ -535,7 +536,7 @@ def test_goal_payload_oob_marker_reaches_observation_and_oracle(
 
     store = MemoryEvidenceChannel()
     store.set_ready(True)
-    oracle = OobOracle(store, wait_seconds=0.0)
+    oracle = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
     without_marker = oracle.evaluate_policy(invariant, (unmarked,))
     assert without_marker.status is VerdictStatus.UNSCOREABLE
     assert without_marker.grounded is False

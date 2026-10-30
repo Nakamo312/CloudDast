@@ -14,7 +14,8 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.events import DomainEvent, FindingRaised
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, reached
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.findings import (
     attach_finding_identity,
 )
@@ -55,6 +56,17 @@ def _invariant() -> InvariantProjection:
         norm_id="ship-order",
         statement="attacker must not ship an unpaid order",
         severity=Severity.HIGH,
+        norm_fact=Fact(
+            context=Context.ACCEPTED,
+            predicate=Predicate.from_name("prevents"),
+            args=(
+                Atom(value="norm:ship-order"),
+                reached(
+                    Atom(value="action:grpc:shop.OrderService.ShipOrder"),
+                    Atom(value="sink:unpaid_shipment"),
+                ),
+            ),
+        ),
     )
 
 
@@ -134,7 +146,7 @@ def _evaluate(*cases: _WitnessCase):
         },
     )
     invariant = _invariant()
-    result = FindingEvaluator(events, events).evaluate(
+    result = FindingEvaluator(EventProjection(events, events)).evaluate(
         execution,
         {invariant.invariant_id: invariant},
     )
@@ -209,10 +221,14 @@ def test_shorter_witness_updates_minimal_poc() -> None:
         minimal_request=short_request,
     )
 
-    result, _ = _evaluate(first, second)
+    result, events = _evaluate(first, second)
 
     assert len(result.findings) == 1
     assert result.findings[0].minimal_poc == short_request
+    assert result.findings[0].observation_id == first.observation.observation_id
+    raised = [event for event in events.events if isinstance(event, FindingRaised)]
+    assert len(raised) == 1
+    assert raised[0].correlation_id == first.check.check_id
 
 
 def test_verdict_identity_is_projected_from_the_formal_sink_norm() -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
@@ -109,14 +111,18 @@ def test_filesystem_404_diagnostic_without_sink_trace_is_unscoreable() -> None:
     assert "not a grounded sink witness" in verdict.rationale
 
 
-def test_marker_rejects_incomplete_response_evidence() -> None:
+@pytest.mark.parametrize("channel", ["response_tree", "fields", "field_names"])
+def test_marker_rejects_incomplete_response_evidence(channel: str) -> None:
     marker = "dast-marker"
     observation = _observation(marker, marker).model_copy(
         update={
-            "response_tree": (
-                ("request.dast-marker", marker),
-                ("__truncated__", True),
-            )
+            "response_tree": (("__truncated__", True),)
+            if channel == "response_tree"
+            else (("request.dast-marker", marker),),
+            "output": ResponseData(
+                fields=(("__truncated__", True),) if channel == "fields" else (),
+                field_names=("__truncated__",) if channel == "field_names" else (),
+            ),
         }
     )
 

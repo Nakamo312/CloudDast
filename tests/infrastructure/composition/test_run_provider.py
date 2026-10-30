@@ -53,6 +53,8 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.qdl.graph_ops import merge_graphs
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign import BoundPathRunner
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
@@ -821,6 +823,10 @@ def test_container_wires_fuzz_session_factory_into_bound_path_runner(
 
     with container as app, app() as run:
         assert isinstance(run.get(BoundPathRunner), BoundPathRunner)
+        projection = run.get(EventProjection)
+        assert run.get(BoundPathRunner)._projection is projection
+        assert run.get(FindingEvaluator)._projection is projection
+        assert run.get(FindingEvaluator) is run.get(FindingEvaluator)
 
 
 def test_workflow_factory_validates_before_touching_ports_and_honors_override(

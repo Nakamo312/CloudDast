@@ -59,7 +59,9 @@ from cloud_dast.qdl.graph import (
     Struct,
 )
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding.config import GrounderOptions
 from cloud_dast.runtime.grounding.promotion import PromotionPolicy
@@ -70,7 +72,6 @@ from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.differential.comparator import (
     compare_observations,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from cloud_dast.verification.oracles.grounded import (
     GroundedOutcomeOracle,
 )
@@ -465,10 +466,10 @@ def _build_campaign(
         bus,
     )
     service_workflow = checker
+    event_projection = EventProjection(bus, events)
     runner = assemble_runner(
         service_workflow,
-        bus,
-        events,
+        event_projection,
         grounded_oracle=GroundedOutcomeOracle(),
         primitive_oracle=PrimitiveOracleRouter(latency_oracle=latency_oracle),
         formal_repository=repository,
@@ -495,7 +496,7 @@ def _build_campaign(
     workflow = assemble_workflow(
         binder,
         runner,
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -758,7 +759,7 @@ def test_readback_measures_mass_assignment_and_proposes_changed_norm() -> None:
     assert metrics.snapshot().diff_pairs_evaluated == 1
     assert metrics.snapshot().diff_pairs_by_mode == {"readback": 1}
 
-    # --- The model saw the paired reads, never the raw canary value. ---
+    # --- The model saw the bounded paired reads, including the canary value. ---
     variance_requests = [
         request
         for request in client.requests
@@ -774,7 +775,7 @@ def test_readback_measures_mass_assignment_and_proposes_changed_norm() -> None:
     assert "total" in {
         leaf["path"] for leaf in evidence["treatment"]["response"]["leaves"]
     }
-    assert "dastpayload" not in json.dumps(context)
+    assert "dastpayload" in json.dumps(context)
     assert context["diff_report"]["dimensions"] == ["value"]
 
     # --- The changed-norm was proposed and persisted as a diff product. ---

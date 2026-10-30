@@ -162,7 +162,7 @@ def test_build_slice_includes_runtime_evidence_in_hash_and_context() -> None:
     assert with_evidence.slice_hash == same_evidence.slice_hash
     assert with_evidence.slice_hash != changed.slice_hash
     assert with_evidence.context()["evidence"] == evidence.to_dict()
-    assert "first response" not in str(with_evidence.context())
+    assert "first response" in str(with_evidence.context())
     assert "evidence" not in build_slice(graph, actions=("action:get-0",)).context()
 
 
@@ -184,6 +184,13 @@ def test_build_slice_evidence_shares_the_token_budget() -> None:
     assert (
         result.token_estimate == estimate_tokens(result.context()) <= budget.max_tokens
     )
+    with pytest.raises(ValueError, match="evidence exceeds token budget"):
+        build_slice(
+            graph,
+            actions=("action:get-0",),
+            evidence=evidence,
+            budget=SliceBudget(max_tokens=evidence_tokens - 1),
+        )
 
 
 def test_build_slice_rejects_invalid_budget() -> None:

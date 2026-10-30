@@ -30,6 +30,7 @@ from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
 from cloud_dast.qdl.reasoning import QdlPlan
 from cloud_dast.runtime.campaign.round import Runner
 from cloud_dast.runtime.execution import BoundPathRunner
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
@@ -186,8 +187,7 @@ def _runner(
     return (
         assemble_runner(
             service,
-            events,
-            events,
+            EventProjection(events, events),
             grounded_oracle=grounded_oracle,
             primitive_oracle=primitive_oracle,
             fuzz_session_factory=fuzz_session_factory,

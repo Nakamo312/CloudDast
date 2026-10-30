@@ -144,10 +144,10 @@ def test_variance_prompt_carries_only_evidence_view() -> None:
     assert request.task == "formal_grounding_variance"
     assert "paired_observations" not in request.context
     evidence = request.context["evidence"]
-    assert evidence["control"]["response_summary"]["evidence_encoding"] == "redacted"
-    assert evidence["treatment"]["response_summary"]["evidence_encoding"] == "redacted"
-    assert "gRPC status: OK" not in json.dumps(evidence)
-    assert "gRPC status: PERMISSION_DENIED" not in json.dumps(evidence)
+    assert evidence["control"]["response_summary"] == _control().response_summary
+    assert evidence["treatment"]["response_summary"] == _treatment().response_summary
+    assert "gRPC status: OK" in json.dumps(evidence)
+    assert "gRPC status: PERMISSION_DENIED" in json.dumps(evidence)
     assert evidence["control"]["status"] == "grpc:OK"
     assert evidence["treatment"]["status"] == "grpc:PERMISSION_DENIED"
     assert evidence["control"]["outcome"] == "allowed"
@@ -164,7 +164,7 @@ def test_variance_prompt_carries_only_evidence_view() -> None:
     assert evidence["diff"]["error_differs"] is True
 
 
-def test_variance_paired_block_never_carries_raw_values() -> None:
+def test_variance_paired_block_retains_bounded_values() -> None:
     client = FakeModelClient(_variance_payload())
     service = Followup(
         consultation=ConsultationDispatcher(client),
@@ -182,8 +182,8 @@ def test_variance_paired_block_never_carries_raw_values() -> None:
     context = client.requests[0].context
     rendered = json.dumps(context, ensure_ascii=False)
     assert "paired_observations" not in context
-    assert "alice@example.com" not in rendered
-    assert "tok_123" not in rendered
+    assert "alice@example.com" in rendered
+    assert "tok_123" in rendered
 
 
 def test_variance_prompt_carries_safe_diff_report_context() -> None:

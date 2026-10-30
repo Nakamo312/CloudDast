@@ -21,7 +21,7 @@ def actions_align(norm_action_id: str | None, method_id: str | None) -> bool:
     return canonical_action_id(norm_action_id) == canonical_action_id(method_id)
 
 
-def action_alignment_rationale(
+def explain_mismatch(
     norm_action_id: str | None,
     method_id: str | None,
 ) -> str | None:

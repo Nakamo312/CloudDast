@@ -34,11 +34,11 @@ from cloud_dast.qdl.validation import (
     ValidationIssue,
     filter_declaration_closure,
 )
-from cloud_dast.verification.norm_view import (
+from cloud_dast.verification.norms import (
     LEAD_NORM_PREFIX,
+    NormCompiler,
     NormView,
 )
-from cloud_dast.verification.norms import NormCompiler
 
 if TYPE_CHECKING:
     from cloud_dast.contracts.payload_proposals import (
@@ -48,22 +48,6 @@ if TYPE_CHECKING:
     from cloud_dast.contracts.payloads import PayloadCorpus
 
 _EXECUTABLE_CONTEXTS = frozenset({Context.CONTRACT, Context.ACCEPTED})
-_SEMANTIC_PREDICATES = frozenset(
-    {
-        "has",
-        "exposes",
-        "reaches",
-        "causes",
-        "requires",
-        "targets",
-        "refers_to",
-        "coupled",
-        "transition",
-        "format",
-        "constraint",
-        "dialect",
-    }
-)
 _CAUSAL_EFFECT_CONSTRUCTORS = frozenset(CAUSAL_EFFECT_CONSTRUCTORS)
 _OWNERSHIP_EFFECT_CONSTRUCTORS = frozenset({"create", "remove"})
 _REACH_SINK_TYPES = frozenset(
@@ -381,8 +365,7 @@ def _filter_response_semantics(
     facts = keep_facts(
         facts,
         lambda fact: (
-            fact.predicate.name != "has"
-            or not _is_output_field_fact(fact)
+            not _is_output_field_fact(fact)
             or _classification_fact_is_trusted(
                 fact,
                 source,
@@ -409,8 +392,7 @@ def _filter_response_semantics(
     facts = keep_facts(
         facts,
         lambda fact: (
-            fact.predicate.name != "has"
-            or not _is_field_role_fact(fact)
+            not _is_field_role_fact(fact)
             or _classification_fact_is_trusted(
                 fact,
                 source,
@@ -426,8 +408,7 @@ def _filter_response_semantics(
     facts = keep_facts(
         facts,
         lambda fact: (
-            fact.predicate.name != "is"
-            or not _is_response_declaration(fact)
+            not _is_response_declaration(fact)
             or _classification_fact_is_trusted(
                 fact,
                 source,
@@ -986,60 +967,41 @@ def _promote_semantic_facts(
             evidence_fields,
             approved_classifications,
         )
-        classification_anchor_supplied = classification_context is not None
-        if (
-            classification_anchor_supplied
-            and fact.predicate.name == "has"
+        is_sink_classification = (
+            fact.predicate.name == "is"
+            and len(fact.args) == 2
+            and atom_value(fact.args[1]) in _REACH_SINK_TYPES
+        )
+        is_protected_role = (
+            fact.predicate.name == "has"
             and len(fact.args) == 2
             and atom_value(fact.args[1]) in PROTECTED_CLASSIFICATION_ROLES
+        )
+        rejection: tuple[str, str] | None = None
+        if (
+            classification_context is not None
+            and (is_sink_classification or is_protected_role)
             and not classification_anchored
         ):
-            parked_facts.append(fact)
-            issues.append(
-                ValidationIssue(
-                    code="classification_anchor",
-                    message="classification fact is outside the exact obligation",
-                    path=f"facts[{canonical_json(fact)}]",
-                )
+            rejection = (
+                "classification_anchor",
+                "classification fact is outside the exact obligation",
             )
-            continue
-        if fact.predicate.name == "is":
-            is_sink_classification = (
-                len(fact.args) == 2 and atom_value(fact.args[1]) in _REACH_SINK_TYPES
-            )
-            if (
-                classification_anchor_supplied
-                and is_sink_classification
-                and not classification_anchored
-            ):
-                parked_facts.append(fact)
-                issues.append(
-                    ValidationIssue(
-                        code="classification_anchor",
-                        message="classification fact is outside the exact obligation",
-                        path=f"facts[{canonical_json(fact)}]",
-                    )
-                )
-                continue
+        elif fact.predicate.name == "is":
             if classification_untrusted or (
                 is_sink_classification
                 and classification_anchored
                 and _sink_type_declaration_lacks_provenance(source, fact)
             ):
-                parked_facts.append(fact)
-                issues.append(
-                    ValidationIssue(
-                        code="classification_parked",
-                        message="sink type declaration lacks source provenance",
-                        path=f"facts[{canonical_json(fact)}]",
-                    )
+                rejection = (
+                    "classification_parked",
+                    "sink type declaration lacks source provenance",
                 )
+            elif not is_sink_classification:
                 continue
-            if classification_anchored and is_sink_classification and fact.args:
+            elif classification_anchored:
                 classification_declared_subjects.add(canonical_json(fact.args[0]))
-            if not is_sink_classification:
-                continue
-        if classification_untrusted:
+        elif classification_untrusted:
             role = atom_value(fact.args[1]) if len(fact.args) == 2 else None
             holder = canonical_json(fact.args[0]) if fact.args else None
             logger.warning(
@@ -1047,11 +1009,17 @@ def _promote_semantic_facts(
                 role,
                 holder,
             )
+            rejection = (
+                "classification_parked",
+                "protected classification lacks trusted provenance",
+            )
+        if rejection is not None:
             parked_facts.append(fact)
+            code, message = rejection
             issues.append(
                 ValidationIssue(
-                    code="classification_parked",
-                    message="protected classification lacks trusted provenance",
+                    code=code,
+                    message=message,
                     path=f"facts[{canonical_json(fact)}]",
                 )
             )
@@ -1371,58 +1339,30 @@ def _semantic_effect_actions(
     supported = _supported_facts(source, proposal, evidence_fields)
     privileged_fields = _privileged_fields(supported)
     actions: set[str] = set()
-
     for fact in supported:
-        if fact.predicate.name == "causes" and len(fact.args) == 2:
-            action, caused_effect = fact.args
-            action_id = atom_value(action)
-            if (
-                action_id in source_actions
-                and isinstance(caused_effect, Struct)
-                and canonical_json(caused_effect) == effect_key
+        if not fact.args:
+            continue
+        action_id = atom_value(fact.args[0])
+        if action_id not in source_actions:
+            continue
+        match fact.predicate.name, fact.args, effect.name, effect.args:
+            case "causes", (_, Struct() as caused), _, _:
+                if canonical_json(caused) == effect_key:
+                    actions.add(action_id)
+            case "exposes", (_, witness), "has", (_, expected):
+                if canonical_json(witness) == canonical_json(expected):
+                    actions.add(action_id)
+            case "transition", (_, before, after), "transition", (start, end):
+                if canonical_json((before, after)) == canonical_json((start, end)):
+                    actions.add(action_id)
+            case "targets", (_, resource), "changed", (target, field_name) if (
+                fact.context in _EXECUTABLE_CONTEXTS
             ):
-                actions.add(action_id)
-
-        if effect.name == "has" and fact.predicate.name == "exposes":
-            if len(fact.args) != 2:
-                continue
-            action, witness = fact.args
-            action_id = atom_value(action)
-            if (
-                action_id in source_actions
-                and len(effect.args) == 2
-                and canonical_json(witness) == canonical_json(effect.args[1])
-            ):
-                actions.add(action_id)
-
-        if effect.name == "transition" and fact.predicate.name == "transition":
-            if len(fact.args) != 3 or len(effect.args) != 2:
-                continue
-            action_id = atom_value(fact.args[0])
-            if (
-                action_id in source_actions
-                and canonical_json(fact.args[1]) == canonical_json(effect.args[0])
-                and canonical_json(fact.args[2]) == canonical_json(effect.args[1])
-            ):
-                actions.add(action_id)
-
-        if effect.name == "changed" and fact.predicate.name == "targets":
-            if (
-                len(fact.args) != 2
-                or len(effect.args) != 2
-                or fact.context not in _EXECUTABLE_CONTEXTS
-            ):
-                continue
-            action, resource = fact.args
-            action_id = atom_value(action)
-            field_name = atom_value(effect.args[1])
-            if (
-                action_id in source_actions
-                and canonical_json(resource) == canonical_json(effect.args[0])
-                and (action_id, field_name) in privileged_fields
-            ):
-                actions.add(action_id)
-
+                if (
+                    canonical_json(resource) == canonical_json(target)
+                    and (action_id, atom_value(field_name)) in privileged_fields
+                ):
+                    actions.add(action_id)
     return frozenset(actions)
 
 
@@ -1552,8 +1492,6 @@ def _semantic_fact_is_promotable(
     approved_classifications: frozenset[str] = frozenset(),
     runtime_evidence_exempt_predicates: frozenset[str] = frozenset(),
 ) -> bool:
-    if fact.predicate.name not in _SEMANTIC_PREDICATES:
-        return False
     if (
         fact.predicate.definition.verification_class == "runtime_falsifiable"
         and fact.predicate.name in _RUNTIME_EVIDENCE_REQUIRED_PREDICATES
@@ -1562,105 +1500,63 @@ def _semantic_fact_is_promotable(
     ):
         return False
 
-    if fact.predicate.name == "has":
-        if len(fact.args) != 2:
-            return False
-        holder, role = fact.args
-        if (
-            not isinstance(holder, Struct)
-            or not isinstance(role, Atom)
-            or not isinstance(role.value, str)
-        ):
-            return False
-        if role.value in PROTECTED_CLASSIFICATION_ROLES and (
-            _classification_lacks_provenance(
-                source,
-                fact,
-                evidence_fields,
-                approved_classifications,
-            )
-        ):
-            return False
-        if holder.name in {"input_field", "output_field"}:
-            return _field_action(holder) in source_actions
-        if holder.name == "field":
-            return any(
+    match fact.predicate.name, fact.args:
+        case "has", (Struct(name=kind) as holder, Atom(value=str() as role)):
+            if (
+                role in PROTECTED_CLASSIFICATION_ROLES
+                and _classification_lacks_provenance(
+                    source, fact, evidence_fields, approved_classifications
+                )
+            ):
+                return False
+            if kind in {"input_field", "output_field"}:
+                return _field_action(holder) in source_actions
+            return kind == "field" and any(
                 exposure.predicate.name == "exposes"
                 and len(exposure.args) == 2
                 and canonical_json(exposure.args[1]) == canonical_json(holder)
                 and atom_value(exposure.args[0]) in source_actions
                 for exposure in _supported_facts(source, proposal, evidence_fields)
             )
-        return False
-
-    if fact.predicate.name in {"exposes", "causes", "transition"}:
-        if not fact.args:
-            return False
-        action_id = atom_value(fact.args[0])
-        if action_id not in source_actions:
-            return False
-        if fact.predicate.name == "causes":
-            effect = fact.args[1] if len(fact.args) == 2 else None
-            if not (
-                isinstance(effect, Struct)
-                and effect.name in _CAUSAL_EFFECT_CONSTRUCTORS
-            ):
-                return False
-            # Ownership effects decide which action provisions a resource
-            # type for setup selection; an unevidenced create (for example
-            # an alternatives proposal naming a non-creating action) must
-            # never cross the promotion boundary.
-            return not (
-                effect.name in _OWNERSHIP_EFFECT_CONSTRUCTORS and not evidence_refs
+        case (("exposes" | "transition"), (action, *_)):
+            return atom_value(action) in source_actions
+        case "causes", (action, Struct(name=kind)):
+            return (
+                atom_value(action) in source_actions
+                and kind in _CAUSAL_EFFECT_CONSTRUCTORS
+                and not (kind in _OWNERSHIP_EFFECT_CONSTRUCTORS and not evidence_refs)
             )
-        return True
-
-    if fact.predicate.name in {"requires", "targets"}:
-        return len(fact.args) == 2 and atom_value(fact.args[0]) in source_actions
-
-    if fact.predicate.name == "refers_to":
-        return len(fact.args) == 2 and _field_action(fact.args[0]) in source_actions
-
-    if fact.predicate.name == "reaches":
-        if len(fact.args) != 2 or _field_action(fact.args[0]) not in source_actions:
-            return False
-        return _source_declares_field(source, fact.args[0]) and bool(
-            _declared_types(source, fact.args[1]) & _REACH_SINK_TYPES
-        )
-
-    if fact.predicate.name == "coupled":
-        if len(fact.args) != 3:
-            return False
-        left_action = _field_action(fact.args[0])
-        right_action = _field_action(fact.args[1])
-        return (
-            left_action in source_actions
-            and right_action in source_actions
-            and atom_value(fact.args[2]) in COUPLED_OPERATORS
-        )
-
-    if fact.predicate.name == "format":
-        return (
-            len(fact.args) == 2
-            and _field_action(fact.args[0]) in source_actions
-            and atom_value(fact.args[1]) is not None
-        )
-
-    if fact.predicate.name == "constraint":
-        return (
-            len(fact.args) == 3
-            and _field_action(fact.args[0]) in source_actions
-            and atom_value(fact.args[1]) in COUPLED_OPERATORS
-            and isinstance(fact.args[2], Atom)
-        )
-
-    if fact.predicate.name == "dialect":
-        return (
-            len(fact.args) == 2
-            and bool(_declared_types(source, fact.args[0]) & _REACH_SINK_TYPES)
-            and atom_value(fact.args[1]) is not None
-        )
-
+        case (("requires" | "targets"), (action, _)):
+            return atom_value(action) in source_actions
+        case "refers_to", (holder, _):
+            return _field_action(holder) in source_actions
+        case "reaches", (holder, sink):
+            return (
+                _field_action(holder) in source_actions
+                and _source_declares_field(source, holder)
+                and bool(_declared_types(source, sink) & _REACH_SINK_TYPES)
+            )
+        case "coupled", (left, right, operator):
+            return (
+                _field_action(left) in source_actions
+                and _field_action(right) in source_actions
+                and atom_value(operator) in COUPLED_OPERATORS
+            )
+        case "format", (holder, format_name):
+            return (
+                _field_action(holder) in source_actions
+                and atom_value(format_name) is not None
+            )
+        case "constraint", (holder, operator, Atom()):
+            return (
+                _field_action(holder) in source_actions
+                and atom_value(operator) in COUPLED_OPERATORS
+            )
+        case "dialect", (sink, dialect):
+            return (
+                bool(_declared_types(source, sink) & _REACH_SINK_TYPES)
+                and atom_value(dialect) is not None
+            )
     return False
 
 

@@ -66,6 +66,7 @@ from cloud_dast.runtime.deficits import (
     coverage_gaps as coverage_deficits,
 )
 from cloud_dast.runtime.deficits.queue import DeficitQueue
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding.config import GrounderOptions
 from cloud_dast.runtime.grounding.promotion import PromotionPolicy
@@ -458,8 +459,7 @@ def test_promotion_fixed_point_closes_deficit_and_scores_new_path(
         )
         runner = assemble_runner(
             checker,
-            bus,
-            events,
+            EventProjection(bus, events),
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,

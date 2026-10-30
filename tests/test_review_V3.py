@@ -1,5 +1,6 @@
 from cloud_dast.composition.execution import assemble_runner
 from cloud_dast.contracts.plan import InvariantProjection
+from cloud_dast.runtime.execution.runner import EventProjection
 
 """F4/F5: partial snapshots and execution events are not negative witnesses."""
 
@@ -28,7 +29,7 @@ from cloud_dast.qdl.graph import (
     input_field,
 )
 from cloud_dast.runtime.execution.checks import bind_event_context, run_check
-from cloud_dast.verification.coverage import build_coverage_matrix
+from cloud_dast.verification.coverage import build_matrix
 from cloud_dast.verification.oracles import DifferentialOracle
 
 
@@ -216,7 +217,7 @@ def test_execution_requires_scoreable_oracle_event_for_effect_coverage(
                 oracle="differential",
             )
         )
-    matrix = build_coverage_matrix(graph, invariants={"i": inv}, events=log.events)
+    matrix = build_matrix(graph, invariants={"i": inv}, events=log.events)
     request = next(cell for cell in matrix.fields if cell.field_kind == "input")
     assert request.request_executed
     effect_cell = matrix.effects[0]
@@ -309,8 +310,7 @@ def test_real_runner_oracle_events_drive_coverage(
 
     runner = assemble_runner(
         Checker(synthetic_response, TemplateGenerator(), AllowAllGuardrail(), log),
-        log,
-        log,
+        EventProjection(log, log),
     )
     result = runner.execute_plan(
         LiveRequest(
@@ -334,7 +334,7 @@ def test_real_runner_oracle_events_drive_coverage(
             fact("causes", action, inv.norm_fact.args[1]),
         )
     )
-    matrix = build_coverage_matrix(graph, invariants={"i": inv}, events=log.events)
+    matrix = build_matrix(graph, invariants={"i": inv}, events=log.events)
     assert (matrix.effects[0].status == "covered") == (
         expected is not VerdictStatus.UNSCOREABLE
     )
@@ -361,7 +361,7 @@ def test_real_runner_oracle_events_drive_coverage(
     store_path = tmp_path / "events.jsonl"
     JsonlEventStore(store_path).append_many(log.events)
     replayed = tuple(JsonlEventStore(store_path).read())
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph, invariants={"i": inv, "changed": changed_norm}, events=replayed
     )
     outcome_cell = next(c for c in matrix.effects if c.effect_kind == "allowed")
@@ -470,7 +470,7 @@ def test_scoreable_step_must_bind_exact_norm_and_effect(proof):
             fact("causes", action, target.norm_fact.args[1]),
         )
     )
-    matrix = build_coverage_matrix(graph, invariants={"i": target}, events=log.events)
+    matrix = build_matrix(graph, invariants={"i": target}, events=log.events)
     assert (matrix.effects[0].status == "covered") == (proof == "matching")
     assert bool(matrix.effects[0].observation_ids) == (proof == "matching")
 
@@ -542,11 +542,11 @@ def test_unrelated_proof_cannot_displace_coverage_in_any_event_order(unrelated):
             fact("causes", action, target.norm_fact.args[1]),
         )
     )
-    expected = build_coverage_matrix(
+    expected = build_matrix(
         graph, invariants={"i": target}, events=(completed, coverage, witness)
     )
     assert expected.effects[0].status == "covered"
     for ordered in permutations((completed, coverage, witness, other)):
-        actual = build_coverage_matrix(graph, invariants={"i": target}, events=ordered)
+        actual = build_matrix(graph, invariants={"i": target}, events=ordered)
         assert actual.effects == expected.effects
         assert actual.fields == expected.fields

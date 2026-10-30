@@ -1,3 +1,5 @@
+from cloud_dast.runtime.execution.runner import EventProjection
+
 """Ordinary QDL requests acquire values without manufacturing causal proof."""
 
 from dataclasses import replace
@@ -175,8 +177,7 @@ def test_outputless_action_observer_consumer_is_an_ordinary_qdl_chain(
     )
     runner = assemble_runner(
         Checker(target, generators, AllowAllGuardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
         formal_repository=repo,
     )
     result = runner.execute_plan(
@@ -293,8 +294,7 @@ def test_repeated_observer_occurrences_supply_latest_actual_values(tmp_path):
 
     runner = assemble_runner(
         Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
         formal_repository=SqliteFormalRepository(tmp_path / "formal.sqlite"),
     )
     result = runner.execute_plan(
@@ -379,8 +379,7 @@ def test_independent_qdl_prerequisites_form_one_conjunctive_chain(tmp_path):
 
     runner = assemble_runner(
         Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
     )
     result = runner.execute_plan(
         LiveRequest(
@@ -458,8 +457,7 @@ def test_new_observation_resumes_chain_without_repeating_mutation(
     repo = SqliteFormalRepository(tmp_path / "formal.sqlite") if persist else None
     runner = assemble_runner(
         Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
         formal_repository=repo,
     )
     scope = EventScope(campaign_id="offline-observation", run_id="offline-run")

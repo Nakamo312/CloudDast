@@ -13,10 +13,10 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.events import normalize_action
 from cloud_dast.qdl.graph_ops import atom_value
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
     actions_align,
+    explain_mismatch,
 )
 from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.projection import ObservationProjector
@@ -41,7 +41,7 @@ class SequenceOracle:
             return self._unscoreable("invariant is not a sequence QDL norm")
         if not trace:
             return self._unscoreable("sequence QDL norm has no observation")
-        mismatch = action_alignment_rationale(norm.action_id, action_id)
+        mismatch = explain_mismatch(norm.action_id, action_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         if norm.effect_name == "transition":
@@ -86,9 +86,8 @@ class SequenceOracle:
             return _transition_verdict(
                 from_state,
                 to_state,
-                before=before,
-                after=after,
-                completed=completed,
+                violated=completed and before == from_state and after == to_state,
+                exact_transition_observed=before == from_state and after == to_state,
                 evidence_refs=evidence_refs,
             )
 
@@ -126,41 +125,15 @@ class SequenceOracle:
             completed and before == from_state and after == to_state
             for _observation_id, completed, before, after in observed
         )
-        if violated:
-            return PolicyVerdict(
-                status=VerdictStatus.FAIL,
-                confidence=1.0,
-                rationale=f"forbidden transition completed: {from_state} -> {to_state}",
-                evidence_refs=evidence_refs,
-                model_id="sequence",
-                deterministic=True,
-                grounded=True,
-            )
-
-        exact_transition_observed = any(
-            before == from_state and after == to_state
-            for _observation_id, _completed, before, after in observed
-        )
-        rationale = (
-            f"forbidden transition was observed but not completed: "
-            f"{from_state} -> {to_state}"
-            if exact_transition_observed
-            else f"forbidden transition is absent from state evidence: "
-            f"{from_state} -> {to_state}"
-        )
-        return PolicyVerdict(
-            status=VerdictStatus.PASS,
-            confidence=1.0,
-            rationale=rationale,
-            evidence_refs=evidence_refs,
-            model_id="sequence",
-            negative_scope=(
-                ("state_before", "state_after", "action_outcome")
-                if exact_transition_observed
-                else ("state_before", "state_after")
+        return _transition_verdict(
+            from_state,
+            to_state,
+            violated=violated,
+            exact_transition_observed=any(
+                before == from_state and after == to_state
+                for _observation_id, _completed, before, after in observed
             ),
-            deterministic=True,
-            grounded=True,
+            evidence_refs=evidence_refs,
         )
 
     @staticmethod
@@ -292,12 +265,11 @@ def _transition_verdict(
     from_state: str,
     to_state: str,
     *,
-    before: str,
-    after: str,
-    completed: bool,
+    violated: bool,
+    exact_transition_observed: bool,
     evidence_refs: tuple[str, ...],
 ) -> PolicyVerdict:
-    if completed and before == from_state and after == to_state:
+    if violated:
         return PolicyVerdict(
             status=VerdictStatus.FAIL,
             confidence=1.0,
@@ -308,7 +280,6 @@ def _transition_verdict(
             grounded=True,
         )
 
-    exact_transition_observed = before == from_state and after == to_state
     rationale = (
         f"forbidden transition was observed but not completed: "
         f"{from_state} -> {to_state}"

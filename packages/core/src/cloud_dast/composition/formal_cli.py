@@ -7,12 +7,12 @@ import json
 from collections.abc import Sequence
 
 from cloud_dast.composition.app_provider import open_formal_repository
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.composition.profile import load_classification_profile
 from cloud_dast.infrastructure.neo4j.common.repository import make_session_factory
 from cloud_dast.infrastructure.neo4j.contract_graph import (
     Neo4jContractGraphRepository,
 )
+from cloud_dast.runtime.ingestion import ContractImporter
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -38,7 +38,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         with open_formal_repository(session_factory) as formal_repository:
-            service = QdlIngestionService(
+            service = ContractImporter(
                 contract_graph,
                 formal_repository,
                 adapter_version=args.adapter_version,

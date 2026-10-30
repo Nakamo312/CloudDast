@@ -17,7 +17,7 @@ from cloud_dast.runtime.deficits.routing import (
     build_deficit,
     deduplicate,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.taxonomy import DEFAULT_CATALOG, ClassificationFacts
 
 CLASSIFICATION_DEFICIT_KIND = "classification_deficit"

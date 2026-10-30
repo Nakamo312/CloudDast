@@ -1,3 +1,5 @@
+from cloud_dast.runtime.execution.runner import EventProjection
+
 """Causal prerequisites use observed QDL effects, independently of violations."""
 
 from dataclasses import replace
@@ -216,8 +218,7 @@ def test_ordinary_create_supplies_renamed_input_without_a_security_norm(
 
     runner = assemble_runner(
         service,
-        events,
-        journal,
+        EventProjection(events, journal),
         formal_repository=repository,
         fuzz_session_factory=session_factory if adaptive else None,
     )
@@ -258,8 +259,7 @@ def test_ordinary_create_supplies_renamed_input_without_a_security_norm(
                     AllowAllGuardrail(),
                     fresh_events,
                 ),
-                fresh_events,
-                fresh_journal,
+                EventProjection(fresh_events, fresh_journal),
                 formal_repository=repository,
             )
             replay = fresh_runner.execute_plan(
@@ -320,8 +320,7 @@ def test_ordinary_prerequisites_share_request_budget_and_guardrail(
 
     runner = assemble_runner(
         Checker(target, TemplateGenerator(), Guardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
     )
     result = runner.execute_plan(
         LiveRequest(
@@ -405,8 +404,7 @@ def test_two_planned_paths_reuse_accumulated_observation(tmp_path, persist):
     bus, journal = _events(tmp_path / "events.jsonl")
     runner = assemble_runner(
         Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
         formal_repository=SqliteFormalRepository(tmp_path / "formal.sqlite")
         if persist
         else None,
@@ -482,8 +480,7 @@ def test_consumed_instance_is_not_reused_by_a_fresh_runner(tmp_path):
         bus, journal = _events(tmp_path / f"events-{index}.jsonl")
         runner = assemble_runner(
             Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-            bus,
-            journal,
+            EventProjection(bus, journal),
             formal_repository=repository,
         )
         result = runner.execute_plan(
@@ -594,8 +591,7 @@ def test_adaptive_prerequisite_retries_share_budget_and_guardrail(
     guardrail, generator = Guardrail(), Generator()
     runner = assemble_runner(
         Checker(target, generator, guardrail, bus),
-        bus,
-        journal,
+        EventProjection(bus, journal),
         fuzz_session_factory=lambda request: build_fuzz_session(
             request,
             generators={"template": generator},

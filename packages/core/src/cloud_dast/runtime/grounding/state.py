@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from cloud_dast.qdl.graph import Context, Fact, QdlGraph
 from cloud_dast.qdl.graph_ops import atom_value
-from cloud_dast.verification.norm_view import LEAD_NORM_PREFIX
+from cloud_dast.verification.norms import LEAD_NORM_PREFIX
 from cloud_dast.verification.promotion import lead_descriptor
 
 _SINK_TYPE_VALUES = frozenset({"interpreter", "filesystem", "external_net"})

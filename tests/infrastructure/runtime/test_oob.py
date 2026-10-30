@@ -29,9 +29,11 @@ from cloud_dast.model import (
 from cloud_dast.model.events import DomainEvent, FindingRaised
 from cloud_dast.ports import EvidenceEvent
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, external_call
+from cloud_dast.runtime import oob
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.checks import run_check
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
-from cloud_dast.verification.oracles import OobOracle
+from cloud_dast.runtime.execution.runner import EventProjection
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
@@ -308,7 +310,9 @@ def test_in_memory_oob_chain_yields_verdict_and_runtime_fact(monkeypatch) -> Non
     observation = _oob_observation(marker)
     invariant = _oob_invariant()
 
-    verdict = OobOracle(store, wait_seconds=0.0).evaluate_policy(
+    verdict = oob.Coordinator(
+        store, verification_oob.Oracle(), wait_seconds=0.0
+    ).evaluate_policy(
         invariant,
         (observation,),
     )
@@ -365,7 +369,7 @@ def test_in_memory_oob_chain_raises_finding(
     assert observation.probe_marker == check.probe_marker
 
     verdict = PrimitiveOracleRouter(
-        oob_oracle=OobOracle(store, wait_seconds=0.0)
+        oob_oracle=oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
     ).evaluate_policy(
         invariant, (observation,), method=method, scenario=scenario_position
     )
@@ -383,7 +387,7 @@ def test_in_memory_oob_chain_raises_finding(
         },
         policy_verdicts={(observation.observation_id, invariant.invariant_id): verdict},
     )
-    evaluation = FindingEvaluator(events, events).evaluate(
+    evaluation = FindingEvaluator(EventProjection(events, events)).evaluate(
         execution,
         {invariant.invariant_id: invariant},
     )
@@ -412,7 +416,9 @@ def test_oob_oracle_does_not_fall_back_to_the_norm_marker() -> None:
     )
     observation = _oob_observation("candidate-marker")
 
-    verdict = OobOracle(store, wait_seconds=0.0).evaluate_policy(
+    verdict = oob.Coordinator(
+        store, verification_oob.Oracle(), wait_seconds=0.0
+    ).evaluate_policy(
         _oob_invariant(),
         (observation,),
     )
@@ -491,7 +497,7 @@ def test_jsonl_oob_timeout_reevaluates_late_durable_callback(tmp_path) -> None:
     marker = "late-callback-marker"
     store = JsonlEvidenceChannel(path)
     observation = _oob_observation(marker)
-    oracle = OobOracle(store, wait_seconds=0.0)
+    oracle = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
 
     timed_out = oracle.evaluate_policy(_oob_invariant(), (observation,))
     event = EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
@@ -510,7 +516,7 @@ def test_memory_oob_timeout_sweeps_late_callback() -> None:
     store.set_ready(True)
     marker = "late-callback-marker"
     observation = _oob_observation(marker)
-    oracle = OobOracle(store, wait_seconds=0.0)
+    oracle = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
 
     timed_out = oracle.evaluate_policy(_oob_invariant(), (observation,))
     assert oracle.reevaluate_pending(timeout=0.0) == {}
@@ -534,7 +540,7 @@ def test_memory_oob_timeout_reevaluates_by_marker() -> None:
     store.set_ready(True)
     marker = "marker-late-callback"
     observation = _oob_observation(marker)
-    oracle = OobOracle(store, wait_seconds=0.0)
+    oracle = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
 
     timed_out = oracle.evaluate_policy(_oob_invariant(), (observation,))
     event = EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
@@ -550,12 +556,13 @@ def test_memory_oob_timeout_reevaluates_by_marker() -> None:
     assert oracle.reevaluate(marker) is None
 
 
-def test_oob_router_sweeps_pending_late_callback(scenario_position) -> None:
+def test_oob_collector_sweeps_router_candidate_late_callback(scenario_position) -> None:
     store = MemoryEvidenceChannel()
     store.set_ready(True)
     marker = "router-late-callback"
     observation = _oob_observation(marker)
-    router = PrimitiveOracleRouter(oob_oracle=OobOracle(store, wait_seconds=0.0))
+    collector = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
+    router = PrimitiveOracleRouter(oob_oracle=collector)
 
     timed_out = router.evaluate_policy(
         _oob_invariant(),
@@ -565,7 +572,7 @@ def test_oob_router_sweeps_pending_late_callback(scenario_position) -> None:
     )
     event = EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
     store.record(event)
-    verdicts = router.reevaluate_oob_pending(timeout=0.0)
+    verdicts = collector.reevaluate_pending(timeout=0.0)
 
     assert timed_out.status is VerdictStatus.UNSCOREABLE
     assert verdicts[observation.observation_id].status is VerdictStatus.FAIL

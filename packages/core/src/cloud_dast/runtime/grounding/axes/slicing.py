@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-from collections.abc import Sequence
-
 from cloud_dast.contracts.axes import NORMS_AXIS
 from cloud_dast.model.events import normalize_action, normalize_principal
 from cloud_dast.qdl.graph import Context, Fact, QdlGraph, canonical_json
 from cloud_dast.qdl.graph_ops import atom_value, merge_graphs
 from cloud_dast.verification.evidence import EvidenceView
 from cloud_dast.verification.slices import (
-    SLICE_VERSION,
     BoundedSlice,
     SliceBudget,
     build_slice,
+    fingerprint,
 )
 
 _GROUNDING_CONTEXTS = frozenset({Context.CONTRACT, Context.ACCEPTED})
@@ -81,7 +77,7 @@ def build_axis_slice(
         depth=max(action_slice.depth, policy_slice.depth),
         token_estimate=action_slice.token_estimate + policy_slice.token_estimate,
         truncated=action_slice.truncated or policy_slice.truncated,
-        slice_hash=model_slice_hash(merged, evidence, action_slice.actions),
+        slice_hash=fingerprint(merged, evidence, action_slice.actions),
     )
 
 
@@ -151,26 +147,3 @@ def campaign_attacker_values(graph: QdlGraph) -> frozenset[str]:
     return frozenset(
         principal for principal in may_principals if principal == "attacker"
     )
-
-
-def model_slice_hash(
-    graph: QdlGraph,
-    evidence: EvidenceView | None,
-    actions: Sequence[str],
-) -> str:
-    """Hash the exact model-facing content of an augmented slice."""
-
-    payload = {
-        "slice_version": SLICE_VERSION,
-        "actions": list(actions),
-        "graph": graph.model_dump(mode="json"),
-        "evidence": evidence.digest if evidence is not None else None,
-    }
-    rendered = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
-    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()

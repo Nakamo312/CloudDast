@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     GrpcStatus,
@@ -14,6 +16,42 @@ from cloud_dast.qdl.graph import (
     allowed,
 )
 from cloud_dast.verification.oracles import GroundedOutcomeOracle
+
+
+@pytest.mark.parametrize(
+    ("required", "effective", "grounded"),
+    [
+        ({"p1", "p2"}, {"p1", "p2", "extra"}, False),
+        ({"p1", "p2"}, {"p1"}, True),
+        ({"p1", "p2"}, {"other"}, True),
+        (set(), set(), False),
+    ],
+)
+def test_permission_evidence_decides_grounding(
+    method_spec, scenario_position, allowed_observation, required, effective, grounded
+) -> None:
+    method = method_spec.model_copy(update={"permissions": frozenset(required)})
+    scenario = scenario_position.model_copy(
+        update={
+            "stand": scenario_position.stand.model_copy(
+                update={
+                    "effective_permissions": frozenset(effective),
+                    "permissions_known": True,
+                }
+            )
+        }
+    )
+
+    verdict = GroundedOutcomeOracle().evaluate_outcome(
+        _invariant("permissions", method.method_id),
+        allowed_observation,
+        method,
+        scenario,
+    )
+
+    assert verdict.status is VerdictStatus.FAIL
+    assert verdict.grounded is grounded
+    assert verdict.deterministic
 
 
 def test_grounded_oracle_fails_when_missing_permission_is_allowed(

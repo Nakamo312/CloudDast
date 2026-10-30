@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.infrastructure.advisory import AdvisoryPreScanService
 from cloud_dast.ports import EventPublisher, EventSubscriber
 from cloud_dast.qdl.graph import QdlGraph
+from cloud_dast.runtime import oob
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign import LiveWorkflow
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.finalization import Finalizer, FinalizerDeps
 from cloud_dast.runtime.campaign.initialization import Bootstrap, BootstrapDeps
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
@@ -26,9 +27,9 @@ from cloud_dast.runtime.grounding import BatchFlow
 from cloud_dast.runtime.grounding.lifecycle import RunCoordinator
 from cloud_dast.runtime.grounding.source import Loader
 from cloud_dast.runtime.grounding.variance import DifferentialFlow
+from cloud_dast.runtime.ingestion import ContractImporter
 from cloud_dast.runtime.replanning import Coordinator
 from cloud_dast.verification.differential.modes import DIFF_MODES
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ class CloudDastRuntime:
     live_workflow: LiveWorkflow
     event_bus: EventPublisher
     event_subscriber: EventSubscriber
-    formal_ingestion: QdlIngestionService
+    formal_ingestion: ContractImporter
     advisory_pre_scan: AdvisoryPreScanService
 
     def pre_scan_advisories(self, service: str) -> QdlGraph | None:
@@ -80,6 +81,7 @@ def assemble_workflow(
     finding_evaluator: FindingEvaluator,
     grounding: BatchFlow | None = None,
     *,
+    oob_collector: oob.Coordinator | None = None,
     lifecycle: RunCoordinator | None = None,
     source: Loader | None = None,
     variance: DifferentialFlow | None = None,
@@ -113,6 +115,7 @@ def assemble_workflow(
             binder=scenario_binder,
             runner=path_runner,
             evaluator=finding_evaluator,
+            oob_collector=oob_collector,
             grounding_runner=settings.grounding_runner,
             event_bus=settings.event_bus,
             metrics=settings.metrics,

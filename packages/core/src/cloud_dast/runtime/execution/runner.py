@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from cloud_dast.contracts.execution import ExecutionResult, LiveRequest
 from cloud_dast.contracts.plan import QdlExecutionView
-from cloud_dast.model import PolicyVerdict
 from cloud_dast.model.events import (
     DomainEvent,
     EventScope,
@@ -30,7 +29,6 @@ from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.terminal import PathTerminalizer
 from cloud_dast.runtime.readback_reevaluation import Reevaluation
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
-from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
 
 logger = logging.getLogger("cloud_dast.runtime.execution.runner")
 
@@ -57,7 +55,11 @@ def build_event_scope(
 
 @dataclass(eq=False, slots=True)
 class EventProjection:
-    """Retain one run-local event cursor and publish scoped execution events."""
+    """Retain run-local history and publish scoped execution events.
+
+    The campaign owner serializes refresh calls. Worker threads may publish
+    through the event bus; this projection is not a concurrent-reader API.
+    """
 
     publisher: EventPublisher
     store: EventStore
@@ -93,18 +95,6 @@ class BoundPathRunner:
     _campaign_round: Runner
     differential: ProbeExecutor
     readback_reevaluation: Reevaluation
-    _primitive_oracle: PrimitiveOracleRouter | None
-
-    def reevaluate_oob_pending(
-        self,
-        *,
-        timeout: float | None = None,
-    ) -> dict[str, PolicyVerdict]:
-        """Return late OOB verdicts for observations timed out earlier."""
-
-        if self._primitive_oracle is None:
-            return {}
-        return self._primitive_oracle.reevaluate_oob_pending(timeout=timeout)
 
     def execute_plan(
         self,

@@ -48,10 +48,12 @@ from cloud_dast.model.events import (
 from cloud_dast.ports import ModelRequest, ModelResponse
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, QdlGraph, Struct
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.graph import (
     Assembler,
 )
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding.config import GrounderOptions
 from cloud_dast.runtime.grounding.promotion import PromotionPolicy
@@ -62,7 +64,6 @@ from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.differential.comparator import (
     compare_observations,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from cloud_dast.verification.oracles.grounded import (
     GroundedOutcomeOracle,
 )
@@ -359,10 +360,10 @@ def _build_campaign(*, diff_mode: bool):
         bus,
     )
     service_workflow = checker
+    event_projection = EventProjection(bus, events)
     runner = assemble_runner(
         service_workflow,
-        bus,
-        events,
+        event_projection,
         grounded_oracle=GroundedOutcomeOracle(),
         primitive_oracle=PrimitiveOracleRouter(),
         formal_repository=repository,
@@ -389,7 +390,7 @@ def _build_campaign(*, diff_mode: bool):
     workflow = assemble_workflow(
         binder,
         runner,
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -513,7 +514,7 @@ def test_differential_discovery_promotes_norm_and_finds_export() -> None:
     assert report.has_variance
     assert metrics.snapshot().diff_pairs_evaluated == 1
 
-    # --- The model saw a shape-only paired context, never raw values. ---
+    # --- The model saw the bounded paired values. Raw domain observations stay separate. ---
     variance_requests = [
         request
         for request in client.requests
@@ -531,14 +532,14 @@ def test_differential_discovery_promotes_norm_and_finds_export() -> None:
         "user_id",
         "data",
     }
-    for observation in (evidence["control"], evidence["treatment"]):
+    for projected, actual in (
+        (evidence["control"], control),
+        (evidence["treatment"], treatment),
+    ):
         values = {
-            leaf["path"]: leaf["value"] for leaf in observation["response"]["leaves"]
+            leaf["path"]: leaf["value"] for leaf in projected["response"]["leaves"]
         }
-        # S12: without an accepted has(output_field(...), object_ref) fact the
-        # reference leaf is redacted too; grounding wiring restores it later.
-        assert values["user_id"]["evidence_encoding"] == "redacted"
-        assert values["data"]["evidence_encoding"] == "redacted"
+        assert values == dict(actual.output.fields)
     assert {item["path"] for item in evidence["diff"]["value_differs"]} == {
         "user_id",
         "data",

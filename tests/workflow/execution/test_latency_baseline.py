@@ -33,6 +33,7 @@ from cloud_dast.runtime.campaign import (
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
 from cloud_dast.runtime.deficits import Deficit
 from cloud_dast.runtime.deficits.queue import DeficitQueue
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.oracles.latency import (
@@ -116,7 +117,9 @@ def _workflow(oracle: LatencyOracle) -> LiveWorkflow:
     return assemble_workflow(
         grounding=ExplodingGrounding(),
         scenario_binder=None,
-        path_runner=Mock(spec_set=assemble_runner(Mock(), Mock(), Mock())),
+        path_runner=Mock(
+            spec_set=assemble_runner(Mock(), EventProjection(Mock(), Mock()))
+        ),
         finding_evaluator=None,
         options=LiveWorkflowOptions(
             latency_oracle=oracle, grounding_runner=ThreadedGroundingRunner()

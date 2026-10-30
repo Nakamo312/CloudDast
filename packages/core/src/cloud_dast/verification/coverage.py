@@ -87,7 +87,7 @@ type StateTransition = tuple[str, str, str]
 type ForbiddenState = tuple[str, str]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _FieldUnit:
     """One per-field coverage unit derived from base QDL facts.
 
@@ -100,35 +100,13 @@ class _FieldUnit:
     field_term: Struct
     field_name: str
     field_kind: TargetFieldKind
-    action_ids: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True, slots=True)
-class _EffectUnit:
-    """One per-effect coverage unit derived from ``causes`` facts."""
-
-    effect: Struct
-    action_ids: frozenset[str] = frozenset()
-    norm_ids: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True, slots=True)
-class _SupportInfo:
-    """Derived primitive support with its scoring norms."""
-
-    norm_ids: frozenset[str] = frozenset()
-
-
-@dataclass(slots=True)
-class _MutableFieldUnit:
-    field_term: Struct
-    field_name: str
-    field_kind: TargetFieldKind
     action_ids: set[str] = dataclass_field(default_factory=set)
 
 
 @dataclass(slots=True)
-class _MutableEffectUnit:
+class _EffectUnit:
+    """One per-effect coverage unit derived from ``causes`` facts."""
+
     effect: Struct
     action_ids: set[str] = dataclass_field(default_factory=set)
     norm_ids: set[str] = dataclass_field(default_factory=set)
@@ -144,7 +122,7 @@ class _RuntimeEffectEvidence:
     norm_ids: set[str] = dataclass_field(default_factory=set)
 
 
-class CoverageMatrixBuilder:
+class Builder:
     """Build derivation-based QDL coverage.
 
     ``QdlGraph`` is the coverage source of truth.  ``QdlPlan`` is a derived
@@ -178,37 +156,8 @@ class CoverageMatrixBuilder:
 
         if not isinstance(source, QdlGraph):
             raise TypeError("coverage source must be a QdlGraph")
-        return self.build_graph(
-            source,
-            context=context,
-            service=service,
-            invariants=invariants,
-            events=events,
-            scope=scope,
-            paths=paths,
-            planned_paths=planned_paths,
-            binding_deficits=binding_deficits,
-            finalize_actions=finalize_actions,
-        )
-
-    def build_graph(
-        self,
-        graph: QdlGraph,
-        *,
-        context: Context = Context.CONTRACT,
-        service: str | None = None,
-        invariants: Mapping[str, InvariantProjection] | None = None,
-        events: Iterable[DomainEvent] | None = None,
-        scope: EventScope | None = None,
-        paths: Iterable[object] = (),
-        planned_paths: Iterable[object] = (),
-        binding_deficits: Iterable[BindingDeficit] = (),
-        finalize_actions: bool = False,
-    ) -> CoverageMatrix:
-        """Build coverage directly from the QDL source of truth."""
-
         return self._build_qdl(
-            graph,
+            source,
             context=context,
             service=service,
             invariants=invariants,
@@ -350,18 +299,16 @@ class CoverageMatrixBuilder:
             source = "causes" if row.source_predicate == "causes" else "declared"
             roles_by_field[canonical_json(row.field_term)][source].add(row.role)
 
-        supports: dict[tuple[str, str], dict[Primitive, _SupportInfo]] = defaultdict(
+        supports: dict[tuple[str, str], dict[Primitive, frozenset[str]]] = defaultdict(
             dict
         )
         for row in derive_primitive_supports(graph, contexts=view_contexts):
             if not derivable(_support_requirement(row), graph, contexts=view_contexts):
                 continue
             key = (canonical_json(row.field_term), row.role)
-            existing = supports[key].get(row.primitive)
-            norm_ids = row.norm_ids
-            if existing is not None:
-                norm_ids = tuple(sorted({*existing.norm_ids, *row.norm_ids}))
-            supports[key][row.primitive] = _SupportInfo(frozenset(norm_ids))
+            supports[key][row.primitive] = supports[key].get(
+                row.primitive, frozenset()
+            ) | frozenset(row.norm_ids)
 
         runtime_by_field_role: dict[tuple[str, str], dict[Primitive, set[str]]] = (
             defaultdict(dict)
@@ -425,52 +372,18 @@ class CoverageMatrixBuilder:
                 runtime_primitives = runtime_by_field_role.get((field_key, role), {})
                 observed = observed_by_field_role.get((field_key, role), {})
                 primitives = sorted({*static_supports, *runtime_primitives, *observed})
-                if not primitives:
-                    factors = TermFactors(
-                        semantic=semantic_factor,
-                        setup=setup_derivable,
-                        oracle_channel=False,
-                        oracle_primitive=False,
-                        runtime=False,
-                    )
-                    evaluation = evaluate_term_coverage(factors)
-                    cells.append(
-                        FieldCoverageCell(
-                            field_id=field_key,
-                            field_name=unit.field_name,
-                            field_kind=unit.field_kind,
-                            semantic_role=role,
-                            primitive="unknown",
-                            status=evaluation.status,
-                            deficit=evaluation.deficit,
-                            action_ids=action_ids,
-                            norm_ids=(),
-                            observation_ids=(),
-                            request_executed=request_executed,
-                            request_execution_ids=request_execution_ids,
-                            request_deficit=request_deficit,
-                            plan_path_ids=plan_path_ids,
-                            rationale=evaluation.rationale,
-                            missing_factor=evaluation.missing_factor,
-                            factors=factors,
-                        )
-                    )
-                    continue
-
-                for primitive in primitives:
+                for primitive in primitives or ("unknown",):
                     observation_ids = tuple(
                         sorted(
                             runtime_primitives.get(primitive, set())
                             | observed.get(primitive, set())
                         )
                     )
-                    norm_ids = tuple(
-                        sorted(static_supports.get(primitive, _SupportInfo()).norm_ids)
-                    )
+                    norm_ids = tuple(sorted(static_supports.get(primitive, ())))
                     factors = TermFactors(
                         semantic=semantic_factor,
                         setup=setup_derivable or bool(observation_ids),
-                        oracle_channel=True,
+                        oracle_channel=bool(primitives),
                         oracle_primitive=primitive != "unknown",
                         runtime=bool(observation_ids),
                     )
@@ -519,100 +432,78 @@ class CoverageMatrixBuilder:
 
         units = _effect_units(graph, view_contexts)
         cells: list[EffectCoverageCell] = []
-        for effect_key, unit in sorted(units.items()):
-            primitive = EFFECT_PRIMITIVES.get(unit.effect.name, "unknown")
-            runtime = runtime_effects.get(effect_key)
-            observation_ids = tuple(
-                sorted(
-                    observations.get(effect_key, set())
-                    | (runtime.observation_ids if runtime is not None else set())
-                )
-            )
-            action_ids = tuple(
-                sorted(
-                    unit.action_ids
-                    | (runtime.action_ids if runtime is not None else set())
-                )
-            )
-            norm_ids = tuple(
-                sorted(
-                    unit.norm_ids | (runtime.norm_ids if runtime is not None else set())
-                )
-            )
-            plan_path_ids = _plan_paths_for_actions(unit.action_ids, plan_paths)
-
-            factors = TermFactors(
-                semantic=True,
-                setup=(
-                    _requirements_derivable(
-                        graph,
-                        view_contexts,
-                        derive_setup_requirements(unit.effect, aspect="effect"),
+        for declared, source in ((True, units), (False, runtime_effects)):
+            for effect_key, unit in sorted(source.items()):
+                if not declared and effect_key in units:
+                    continue
+                primitive = EFFECT_PRIMITIVES.get(unit.effect.name, "unknown")
+                runtime = runtime_effects.get(effect_key)
+                observation_ids = tuple(
+                    sorted(
+                        (observations.get(effect_key, set()) if declared else set())
+                        | (runtime.observation_ids if runtime is not None else set())
                     )
-                    or bool(observation_ids)
-                ),
-                oracle_channel=True,
-                oracle_primitive=primitive != "unknown",
-                runtime=bool(observation_ids),
-            )
-            evaluation = evaluate_term_coverage(factors)
-            rationale = evaluation.rationale
-            if evaluation.status == "covered":
-                rationale = "effect has runtime evidence"
-
-            cells.append(
-                EffectCoverageCell(
-                    effect_id=effect_key,
-                    effect_kind=unit.effect.name,
-                    primitive=primitive,
-                    status=evaluation.status,
-                    deficit=evaluation.deficit,
-                    action_ids=action_ids,
-                    norm_ids=norm_ids,
-                    observation_ids=observation_ids,
-                    plan_path_ids=plan_path_ids,
-                    rationale=rationale,
-                    missing_factor=evaluation.missing_factor,
-                    factors=factors,
                 )
-            )
-
-        # Runtime evidence proves producibility even when no ``causes`` fact
-        # exists yet: the live capability enters coverage instead of staying
-        # invisible behind a missing contract fact.
-        for effect_key, runtime in sorted(runtime_effects.items()):
-            if effect_key in units:
-                continue
-            primitive = EFFECT_PRIMITIVES.get(runtime.effect.name, "unknown")
-            factors = TermFactors(
-                semantic=True,
-                setup=True,
-                oracle_channel=True,
-                oracle_primitive=primitive != "unknown",
-                runtime=bool(runtime.observation_ids),
-            )
-            evaluation = evaluate_term_coverage(factors)
-            rationale = evaluation.rationale
-            if evaluation.status == "covered":
-                rationale = "runtime evidence proves the effect without a causes fact"
-            cells.append(
-                EffectCoverageCell(
-                    effect_id=effect_key,
-                    effect_kind=runtime.effect.name,
-                    primitive=primitive,
-                    status=evaluation.status,
-                    deficit=evaluation.deficit,
-                    action_ids=tuple(sorted(runtime.action_ids)),
-                    norm_ids=tuple(sorted(runtime.norm_ids)),
-                    observation_ids=tuple(sorted(runtime.observation_ids)),
-                    plan_path_ids=_plan_paths_for_actions(
-                        frozenset(runtime.action_ids), plan_paths
+                action_ids = tuple(
+                    sorted(
+                        unit.action_ids
+                        | (runtime.action_ids if runtime is not None else set())
+                    )
+                )
+                norm_ids = tuple(
+                    sorted(
+                        unit.norm_ids
+                        | (runtime.norm_ids if runtime is not None else set())
+                    )
+                )
+                plan_path_ids = (
+                    _plan_paths_for_actions(unit.action_ids, plan_paths)
+                    if declared
+                    else ()
+                )
+                factors = TermFactors(
+                    semantic=True,
+                    setup=(
+                        not declared
+                        or _requirements_derivable(
+                            graph,
+                            view_contexts,
+                            derive_setup_requirements(unit.effect, aspect="effect"),
+                        )
+                        or bool(observation_ids)
                     ),
-                    rationale=rationale,
-                    missing_factor=evaluation.missing_factor,
-                    factors=factors,
+                    oracle_channel=True,
+                    oracle_primitive=primitive != "unknown",
+                    runtime=bool(observation_ids),
                 )
-            )
+                evaluation = evaluate_term_coverage(factors)
+                rationale = evaluation.rationale
+                if evaluation.status == "covered":
+                    rationale = (
+                        "effect has runtime evidence"
+                        if declared
+                        else "runtime evidence proves the effect without a causes fact"
+                    )
+                cells.append(
+                    EffectCoverageCell(
+                        effect_id=effect_key,
+                        effect_kind=unit.effect.name,
+                        primitive=primitive,
+                        status=evaluation.status,
+                        deficit=evaluation.deficit,
+                        action_ids=action_ids,
+                        norm_ids=norm_ids,
+                        observation_ids=observation_ids,
+                        plan_path_ids=(
+                            plan_path_ids
+                            if declared
+                            else _plan_paths_for_actions(unit.action_ids, plan_paths)
+                        ),
+                        rationale=rationale,
+                        missing_factor=evaluation.missing_factor,
+                        factors=factors,
+                    )
+                )
         return tuple(
             sorted(
                 cells, key=lambda cell: (cell.effect_id, cell.primitive, cell.status)
@@ -843,7 +734,7 @@ class CoverageMatrixBuilder:
         return dict(norms)
 
 
-def build_coverage_matrix(
+def build_matrix(
     source: object,
     *,
     context: Context = Context.CONTRACT,
@@ -858,7 +749,7 @@ def build_coverage_matrix(
 ) -> CoverageMatrix:
     """Build coverage from the QDL source and optional runtime evidence."""
 
-    return CoverageMatrixBuilder().build(
+    return Builder().build(
         source,
         context=context,
         service=service,
@@ -1016,7 +907,7 @@ def _field_units(
         for fact in graph.facts_for("is", contexts=contexts)
         if len(fact.args) == 2
     }
-    units: dict[tuple[str, TargetFieldKind], _MutableFieldUnit] = {}
+    units: dict[tuple[str, TargetFieldKind], _FieldUnit] = {}
 
     def unit_for(
         field_term: Struct,
@@ -1027,7 +918,7 @@ def _field_units(
         key = (canonical_json(field_term), field_kind)
         unit = units.setdefault(
             key,
-            _MutableFieldUnit(
+            _FieldUnit(
                 field_term=field_term,
                 field_name=field_name,
                 field_kind=field_kind,
@@ -1092,15 +983,7 @@ def _field_units(
             _term_key(action),
         )
 
-    return {
-        key: _FieldUnit(
-            field_term=unit.field_term,
-            field_name=unit.field_name,
-            field_kind=unit.field_kind,
-            action_ids=frozenset(unit.action_ids),
-        )
-        for key, unit in units.items()
-    }
+    return units
 
 
 def _effect_units(
@@ -1124,7 +1007,7 @@ def _effect_units(
             continue
         norms_by_effect[canonical_json(effect)].add(_term_key(norm))
 
-    units: dict[str, _MutableEffectUnit] = {}
+    units: dict[str, _EffectUnit] = {}
     for fact in graph.facts:
         if fact.context not in contexts or fact.predicate.name != "causes":
             continue
@@ -1134,18 +1017,11 @@ def _effect_units(
         if not isinstance(effect, Struct) or effect.name == "transition":
             continue
         key = canonical_json(effect)
-        unit = units.setdefault(key, _MutableEffectUnit(effect=effect))
+        unit = units.setdefault(key, _EffectUnit(effect=effect))
         unit.action_ids.add(_term_key(action))
         unit.norm_ids.update(norms_by_effect.get(key, ()))
 
-    return {
-        key: _EffectUnit(
-            effect=unit.effect,
-            action_ids=frozenset(unit.action_ids),
-            norm_ids=frozenset(unit.norm_ids),
-        )
-        for key, unit in units.items()
-    }
+    return units
 
 
 def _field_name(field_term: Struct) -> str:

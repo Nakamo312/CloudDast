@@ -16,6 +16,7 @@ from cloud_dast.verification.differential.report import (
     TimingEvidence,
 )
 from cloud_dast.verification.oracles.latency import LatencyBaseline
+from cloud_dast.verification.witness import response_is_incomplete
 
 
 def compare_observations(
@@ -35,7 +36,7 @@ def compare_observations(
     durations; callers with repeated samples pass a robust class.
     """
 
-    if _response_is_incomplete(control) or _response_is_incomplete(treatment):
+    if response_is_incomplete(control) or response_is_incomplete(treatment):
         return None
 
     control_names = _shape_names(control)
@@ -75,7 +76,7 @@ def compare_timing_measurements(
     if min_samples < 3:
         raise ValueError("timing comparison requires at least three samples")
     if any(
-        _response_is_incomplete(observation)
+        response_is_incomplete(observation)
         for observation in (*control_samples, *treatment_samples)
     ):
         return None
@@ -160,7 +161,7 @@ def compare_concurrency_measurements(
         *(() if read_before is None else (read_before,)),
         *(() if read_after is None else (read_after,)),
     )
-    if any(_response_is_incomplete(observation) for observation in observations):
+    if any(response_is_incomplete(observation) for observation in observations):
         return None
 
     outcome_counts = _outcome_counts(probes)
@@ -355,23 +356,3 @@ def _value_differs(
             if control_values[name] != treatment_values[name]
         )
     return tuple(sorted(differing))
-
-
-_INCOMPLETE_RESPONSE_PATHS = frozenset({"__truncated__", "not_available"})
-
-
-def _response_is_incomplete(observation: Observation) -> bool:
-    paths = {path for path, _ in observation.response_tree if _is_incomplete_path(path)}
-    output = observation.output
-    if output is not None:
-        paths.update(name for name, _ in output.fields if _is_incomplete_path(name))
-        paths.update(
-            name
-            for name in getattr(output, "field_names", ())
-            if _is_incomplete_path(name)
-        )
-    return bool(paths)
-
-
-def _is_incomplete_path(path: str) -> bool:
-    return path in _INCOMPLETE_RESPONSE_PATHS or path.endswith(".not_available")

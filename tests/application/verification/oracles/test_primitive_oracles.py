@@ -17,14 +17,15 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.ports import EvidenceEvent
+from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
     FieldExposureOracle,
     LatencyBaseline,
     LatencyOracle,
     MarkerOracle,
-    OobOracle,
     PrimitiveOracleRouter,
 )
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.latency import AvailabilityOracle
 
 
@@ -655,7 +656,9 @@ def test_oob_oracle_uses_asynchronous_callback_evidence() -> None:
         channel="oob", correlation_id="dast-oob-marker", source="10.0.0.8"
     )
 
-    oracle = OobOracle(_ReadyEventStore(event), wait_seconds=0.0)
+    oracle = oob.Coordinator(
+        _ReadyEventStore(event), verification_oob.Oracle(), wait_seconds=0.0
+    )
     verdict = oracle.evaluate_policy(_invariant(effect), (observation,))
 
     assert verdict.status is VerdictStatus.FAIL
@@ -678,13 +681,11 @@ def test_oob_oracle_uses_candidate_probe_marker() -> None:
         source="10.0.0.8",
     )
 
-    wrong_verdict = OobOracle(
-        _ReadyEventStore(wrong_event),
-        wait_seconds=0.0,
+    wrong_verdict = oob.Coordinator(
+        _ReadyEventStore(wrong_event), verification_oob.Oracle(), wait_seconds=0.0
     ).evaluate_policy(_invariant(effect), (observation,))
-    matching_verdict = OobOracle(
-        _ReadyEventStore(matching_event),
-        wait_seconds=0.0,
+    matching_verdict = oob.Coordinator(
+        _ReadyEventStore(matching_event), verification_oob.Oracle(), wait_seconds=0.0
     ).evaluate_policy(_invariant(effect), (observation,))
 
     assert wrong_verdict.status is VerdictStatus.UNSCOREABLE
@@ -701,9 +702,8 @@ def test_oob_oracle_rejects_unattributed_norm_marker_fallback() -> None:
         channel="oob", correlation_id="dast-oob-marker", source="10.0.0.8"
     )
 
-    verdict = OobOracle(
-        _ReadyEventStore(event),
-        wait_seconds=0.0,
+    verdict = oob.Coordinator(
+        _ReadyEventStore(event), verification_oob.Oracle(), wait_seconds=0.0
     ).evaluate_policy(_invariant(effect), (observation,))
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
@@ -718,7 +718,9 @@ def test_oob_oracle_timeout_is_negative_evidence_not_grounded_pass() -> None:
     )
     observation = _observation(probe_marker="dast-oob-marker-check-1")
 
-    verdict = OobOracle(_ReadyEventStore(), wait_seconds=0.0).evaluate_policy(
+    verdict = oob.Coordinator(
+        _ReadyEventStore(), verification_oob.Oracle(), wait_seconds=0.0
+    ).evaluate_policy(
         _invariant(effect),
         (observation,),
     )
@@ -737,7 +739,9 @@ def test_oob_oracle_uses_configured_probe_timeout() -> None:
     observation = _observation(probe_marker="dast-oob-marker-check-1")
     store = _ReadyEventStore()
 
-    verdict = OobOracle(store).evaluate_policy(_invariant(effect), (observation,))
+    verdict = oob.Coordinator(store, verification_oob.Oracle()).evaluate_policy(
+        _invariant(effect), (observation,)
+    )
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert store.timeouts == [0.0, OOB_PROBE_TIMEOUT_SECONDS]
@@ -751,7 +755,7 @@ def test_oob_oracle_re_evaluates_late_callback() -> None:
     )
     observation = _observation(probe_marker="dast-oob-marker-check-1")
     store = _ReadyEventStore()
-    oracle = OobOracle(store, wait_seconds=0.0)
+    oracle = oob.Coordinator(store, verification_oob.Oracle(), wait_seconds=0.0)
 
     timed_out = oracle.evaluate_policy(_invariant(effect), (observation,))
     event = EvidenceEvent(
@@ -775,7 +779,9 @@ def test_oob_oracle_reports_blocked_channel_reason() -> None:
     store = _ReadyEventStore()
     store.block("listener port is unavailable")
 
-    verdict = OobOracle(store, wait_seconds=0.0).evaluate_policy(
+    verdict = oob.Coordinator(
+        store, verification_oob.Oracle(), wait_seconds=0.0
+    ).evaluate_policy(
         _invariant(effect),
         (observation,),
     )

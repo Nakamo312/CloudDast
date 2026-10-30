@@ -17,7 +17,7 @@ from cloud_dast.qdl.graph import (
     allowed,
     identity,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
     ACTION_MISMATCH_RATIONALE,
 )

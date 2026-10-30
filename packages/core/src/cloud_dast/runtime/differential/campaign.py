@@ -32,7 +32,7 @@ from cloud_dast.verification.differential.modes import (
     CONCURRENCY_PROBES,
     TIMING_REPEATS,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.latency import LatencyOracle
 
 logger = logging.getLogger("cloud_dast.runtime.differential.campaign")

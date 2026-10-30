@@ -275,16 +275,15 @@ def test_ground_reactive_uses_only_evidence_view_for_live_observation() -> None:
     assert set(request.context) == {"graph", "evidence"}
     assert "live_observation" not in request.context
     evidence = request.context["evidence"]
-    assert evidence["response_summary"]["evidence_encoding"] == "redacted"
-    assert "blocked at the blind link" not in json.dumps(evidence)
+    assert evidence["response_summary"] == _observation().response_summary
+    assert "blocked at the blind link" in json.dumps(evidence)
     assert [leaf["path"] for leaf in evidence["response"]["leaves"]] == [
         "error",
         "request_id",
     ]
-    assert all(
-        leaf["value"]["evidence_encoding"] == "redacted"
-        for leaf in evidence["response"]["leaves"]
-    )
+    assert {
+        leaf["path"]: leaf["value"] for leaf in evidence["response"]["leaves"]
+    } == dict(_observation().output.fields)
 
 
 def test_ground_reactive_puts_structured_evidence_into_prompt() -> None:
@@ -329,16 +328,16 @@ def test_ground_reactive_puts_structured_evidence_into_prompt() -> None:
     evidence = client.requests[0].context["evidence"]
     assert isinstance(evidence, dict)
     assert evidence["request"]["values"][0]["name"] == "query"
-    assert evidence["request"]["values"][0]["value"]["evidence_encoding"] == "redacted"
+    assert evidence["request"]["values"][0]["value"] == dict(check.request)["query"]
     assert evidence["response"]["leaves"][0]["path"] == "nested.token"
-    assert evidence["response"]["leaves"][0]["value"]["evidence_encoding"] == "redacted"
-    assert evidence["error_reason"]["evidence_encoding"] == "redacted"
-    assert "permission denied" not in json.dumps(evidence)
-    assert evidence["oob"]["events"][0]["source"]["evidence_encoding"] == "redacted"
+    assert evidence["response"]["leaves"][0]["value"] == "tok-full-fidelity"
+    assert evidence["error_reason"] == "permission denied"
+    assert "permission denied" in json.dumps(evidence)
+    assert evidence["oob"]["events"][0]["source"] == "10.0.0.8"
     rendered = json.dumps(evidence, ensure_ascii=False)
-    assert "attacker-canary" not in rendered
-    assert "tok-full-fidelity" not in rendered
-    assert "10.0.0.8" not in rendered
+    assert "attacker-canary" in rendered
+    assert "tok-full-fidelity" in rendered
+    assert "10.0.0.8" in rendered
 
 
 def test_response_semantics_axis_asks_for_generic_facts_with_evidence() -> None:
@@ -402,7 +401,7 @@ def test_response_semantics_axis_asks_for_generic_facts_with_evidence() -> None:
     assert "prevents(" not in request.instruction
     evidence_leaf = request.context["evidence"]["response"]["leaves"][0]
     assert evidence_leaf["path"] == "email"
-    assert evidence_leaf["value"]["evidence_encoding"] == "redacted"
+    assert evidence_leaf["value"] == "user-1@example.test"
     assert result.graph is not None
     predicates = {fact.predicate.name for fact in result.graph.facts}
     assert predicates <= {"is", "exposes", "has"}
@@ -646,29 +645,13 @@ def test_ground_variance_puts_full_pair_evidence_into_prompt() -> None:
     )
 
     evidence = client.requests[0].context["evidence"]
-    assert evidence["control"]["request"]["values"][0]["value"][
-        "evidence_encoding"
-    ] == ("redacted")
-    assert (
-        evidence["treatment"]["request"]["values"][0]["value"]["evidence_encoding"]
-        == "redacted"
-    )
+    assert evidence["control"]["request"]["values"][0]["value"] == "benign"
+    assert evidence["treatment"]["request"]["values"][0]["value"] == "canary"
     assert evidence["diff"]["value_differs"][0]["path"] == "email"
-    assert (
-        evidence["diff"]["value_differs"][0]["control_value"]["evidence_encoding"]
-        == "redacted"
-    )
-    assert (
-        evidence["diff"]["value_differs"][0]["treatment_value"]["evidence_encoding"]
-        == "redacted"
-    )
+    assert evidence["diff"]["value_differs"][0]["control_value"] == "alice@example.com"
+    assert evidence["diff"]["value_differs"][0]["treatment_value"] == "bob@example.com"
     assert evidence["diff"]["fields_only_treatment"][0]["path"] == "payment_token"
-    assert (
-        evidence["diff"]["fields_only_treatment"][0]["treatment_value"][
-            "evidence_encoding"
-        ]
-        == "redacted"
-    )
+    assert evidence["diff"]["fields_only_treatment"][0]["treatment_value"] == "tok_123"
 
 
 def test_ground_alternatives_uses_evidence_instead_of_safe_field_whitelist() -> None:
@@ -703,17 +686,14 @@ def test_ground_alternatives_uses_evidence_instead_of_safe_field_whitelist() -> 
 
     evidence = client.requests[0].context["evidence"]
     assert evidence["request"]["values"][0]["name"] == "query"
-    assert evidence["request"]["values"][0]["value"]["evidence_encoding"] == "redacted"
+    assert evidence["request"]["values"][0]["value"] == dict(check.request)["query"]
     assert [leaf["path"] for leaf in evidence["response"]["leaves"]] == [
         "safe",
         "nested.reason",
     ]
     assert evidence["response"]["safe_fields"][0]["path"] == "safe"
-    assert (
-        evidence["response"]["safe_fields"][0]["value"]["evidence_encoding"]
-        == "redacted"
-    )
-    assert evidence["response"]["leaves"][1]["value"]["evidence_encoding"] == "redacted"
+    assert evidence["response"]["safe_fields"][0]["value"] == "sanitized"
+    assert evidence["response"]["leaves"][1]["value"] == "full reason"
 
 
 def test_auto_grounding_passes_check_evidence_through_branch_batch() -> None:
@@ -761,9 +741,9 @@ def test_auto_grounding_passes_check_evidence_through_branch_batch() -> None:
 
     evidence = client.requests[0].context["evidence"]
     assert evidence["request"]["values"][0]["name"] == "query"
-    assert evidence["request"]["values"][0]["value"]["evidence_encoding"] == "redacted"
+    assert evidence["request"]["values"][0]["value"] == dict(check.request)["query"]
     assert evidence["response"]["leaves"][0]["path"] == "error"
-    assert evidence["response"]["leaves"][0]["value"]["evidence_encoding"] == "redacted"
+    assert evidence["response"]["leaves"][0]["value"] == "full error"
 
 
 def test_startup_grounding_sees_accepted_and_diff_sources() -> None:

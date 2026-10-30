@@ -25,6 +25,7 @@ from cloud_dast.model import (
 from cloud_dast.model.events import CheckCompleted, DomainEvent
 from cloud_dast.qdl.graph import Atom, input_field, output_field
 from cloud_dast.runtime.budget import CallLimits
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import (
     Checker,
     ConcurrencyPartialResult,
@@ -287,7 +288,7 @@ def test_blocked_pair_retains_only_current_attempts(
     assert checker.execute_check(seed) is not None
     # Exclude prior campaign history from both the receipt and pair spending.
     checker._guardrail = Guardrail()
-    runner = assemble_runner(checker, events, events)
+    runner = assemble_runner(checker, EventProjection(events, events))
     method = method_spec.model_copy(
         update={"fields": (FieldSpec(name="note", type="string"),)}
     )
@@ -444,7 +445,7 @@ def test_concurrency_failure_counts_attempted_probes_in_budget() -> None:
     events = EventLog()
     checker = Checker(target, TemplateGenerator(), AllowAllGuardrail(), events)
     service = checker
-    runner = assemble_runner(service, events, events)
+    runner = assemble_runner(service, EventProjection(events, events))
     budget = CallLimits(4)
     budget.begin_differential_round()
 

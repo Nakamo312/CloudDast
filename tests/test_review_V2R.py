@@ -1,3 +1,5 @@
+from cloud_dast.runtime.execution.runner import EventProjection
+
 """A promoted norm interprets the original physical readback measurement."""
 
 from dataclasses import replace
@@ -293,7 +295,7 @@ from tests.test_review_V2 import measurement as measurement
 
 
 def test_two_norms_share_the_original_measurement_without_overwriting(captured):
-    from cloud_dast.verification.finding_evaluator import FindingEvaluator
+    from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
     from tests.test_review_C1 import EventLog
 
     services, request, paths, physical, metadata, norms = captured
@@ -324,7 +326,7 @@ def test_two_norms_share_the_original_measurement_without_overwriting(captured):
         == {}
     )
     log = EventLog()
-    evaluation = FindingEvaluator(log, log).evaluate(
+    evaluation = FindingEvaluator(EventProjection(log, log)).evaluate(
         accumulator.as_result(), {n.invariant_id: n for n in norms}
     )
     assert len(evaluation.findings) == 2
@@ -365,7 +367,7 @@ def test_reinterpretation_requires_the_original_actual_check(captured, field, va
 
 def test_evaluator_uses_current_registry_and_owner_check_over_raw_event(captured):
     from cloud_dast.model.events import CheckCompleted
-    from cloud_dast.verification.finding_evaluator import FindingEvaluator
+    from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
     from tests.test_review_C1 import EventLog
 
     _, _, _, physical, metadata, norms = captured
@@ -377,7 +379,7 @@ def test_evaluator_uses_current_registry_and_owner_check_over_raw_event(captured
         update={"invariant_id": "wrong-hint", "request": (("redacted", "event"),)}
     )
     log.publish(CheckCompleted(check=event_check, observation=physical.observations[1]))
-    evaluator = FindingEvaluator(log, log)
+    evaluator = FindingEvaluator(EventProjection(log, log))
     assert evaluator.evaluate(accumulator.as_result(), {}).findings == ()
     findings = evaluator.evaluate(
         accumulator.as_result(), {n.invariant_id: n for n in norms}
@@ -388,7 +390,7 @@ def test_evaluator_uses_current_registry_and_owner_check_over_raw_event(captured
 
 def test_second_norm_without_before_channel_stays_unscoreable(captured):
     from cloud_dast.model import VerdictStatus
-    from cloud_dast.verification.finding_evaluator import FindingEvaluator
+    from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
     from tests.test_review_C1 import EventLog
 
     services, request, paths, physical, _, norms = captured
@@ -432,7 +434,7 @@ def test_second_norm_without_before_channel_stays_unscoreable(captured):
     accumulator.add(metadata)
     log = EventLog()
     findings = (
-        FindingEvaluator(log, log)
+        FindingEvaluator(EventProjection(log, log))
         .evaluate(accumulator.as_result(), {n.invariant_id: n for n in norms})
         .findings
     )

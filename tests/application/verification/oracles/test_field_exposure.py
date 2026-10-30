@@ -175,12 +175,21 @@ def test_field_exposure_keeps_possession_principal_scope() -> None:
     "incomplete_path",
     ["__truncated__", "not_available", "__response__.not_available"],
 )
+@pytest.mark.parametrize("channel", ["response_tree", "fields", "field_names"])
 def test_field_exposure_rejects_incomplete_response(
     incomplete_path: str,
+    channel: str,
 ) -> None:
     observation = _observation(
-        output=ResponseData(fields=(("id", "safe"),)),
-        response_tree=((incomplete_path, True),),
+        output=ResponseData(
+            fields=((incomplete_path, True),) if channel == "fields" else (),
+            field_names=(incomplete_path,) if channel == "field_names" else (),
+        ),
+        response_tree=(
+            ((incomplete_path, True),)
+            if channel == "response_tree"
+            else (("private_key", "PEM"),)
+        ),
     )
 
     verdict = FieldExposureOracle().evaluate_policy(

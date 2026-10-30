@@ -48,9 +48,10 @@ from cloud_dast.runtime.deficits import (
     grounding_result_closes_deficit,
     response_semantics_deficits,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics
-from cloud_dast.verification.coverage import build_coverage_matrix
+from cloud_dast.verification.coverage import build_matrix
 from tests.support.guardrails import AllowAllGuardrail
 
 
@@ -309,8 +310,7 @@ def _intent_labels(invariant: InvariantProjection) -> dict[str, str]:
             AllowAllGuardrail(),
             events,
         ),
-        events,
-        events,
+        EventProjection(events, events),
         metrics=metrics,
     )
     step = QdlExecutionStep(
@@ -404,7 +404,7 @@ def test_coverage_keys_exposed_output_paths_verbatim() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     assert sorted(cell.field_name for cell in matrix.fields) == [
         "items.0.foo.bar",

@@ -15,7 +15,7 @@ from cloud_dast.model import (
 from cloud_dast.model.events import normalize_action
 from cloud_dast.qdl.graph import Atom, Context, Struct
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
+    explain_mismatch,
 )
 from cloud_dast.verification.oracles.trace import ObservationTrace
 
@@ -133,7 +133,7 @@ class AvailabilityOracle:
         norm = _parse_latency_norm(invariant)
         if norm is None:
             return self._unscoreable("invariant is not a latency-bound QDL norm")
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         if norm.action_id is None or norm.duration_ms is None:
@@ -284,7 +284,7 @@ class LatencyOracle:
         norm = _parse_latency_norm(invariant)
         if norm is None:
             return self._unscoreable("invariant is not a latency-bound QDL norm")
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         if norm.action_id is None or norm.duration_ms is None:

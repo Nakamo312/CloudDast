@@ -21,6 +21,7 @@ from cloud_dast.runtime.campaign import (
     FindingEvaluator,
 )
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
@@ -138,6 +139,7 @@ def test_live_workflow_records_all_campaign_phases(
     bus.subscribe(PhaseChanged, events.append)
     service = Checker(_allowed_target, TemplateGenerator(), AllowAllGuardrail(), bus)
     metrics = CampaignMetrics()
+    event_projection = EventProjection(bus, events)
     workflow = assemble_workflow(
         ScenarioBinder(
             MethodRepo((method_spec,)),
@@ -147,13 +149,12 @@ def test_live_workflow_records_all_campaign_phases(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         options=LiveWorkflowOptions(event_bus=bus, metrics=metrics),
     )
 

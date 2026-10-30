@@ -635,46 +635,22 @@ class ContractProjector:
         _add_fact(_fact(_IS, term, Atom(value="InputField")), facts_by_key)
         _add_fact(_fact(_PART, term, record.action), facts_by_key)
 
-        _emit_scalar(
-            "type",
-            record.types,
-            "field_type",
-            field_id,
-            term,
-            facts_by_key,
-            predicates,
-            conflict,
-        )
-        _emit_scalar(
-            "required",
-            record.required,
-            "field_required",
-            field_id,
-            term,
-            facts_by_key,
-            predicates,
-            conflict,
-        )
-        _emit_scalar(
-            "repeated",
-            record.repeated,
-            "field_repeated",
-            field_id,
-            term,
-            facts_by_key,
-            predicates,
-            conflict,
-        )
-        _emit_scalar(
-            "oneof",
-            record.oneofs,
-            "field_oneof",
-            field_id,
-            term,
-            facts_by_key,
-            predicates,
-            conflict,
-        )
+        for attribute, values, predicate_name in (
+            ("type", record.types, "field_type"),
+            ("required", record.required, "field_required"),
+            ("repeated", record.repeated, "field_repeated"),
+            ("oneof", record.oneofs, "field_oneof"),
+        ):
+            _emit_scalar(
+                attribute,
+                values,
+                predicate_name,
+                field_id,
+                term,
+                facts_by_key,
+                predicates,
+                conflict,
+            )
 
         for value in record.enum_values:
             _add_fact(
@@ -691,28 +667,16 @@ class ContractProjector:
             ("minimum", record.minimums, "field_minimum"),
             ("maximum", record.maximums, "field_maximum"),
         ):
-            if len(values) > 1:
-                conflict.append(
-                    ProjectionIssue(
-                        category="conflict",
-                        element="field",
-                        identifier=field_id,
-                        detail=f"field {attribute} has conflicting values",
-                        choices=tuple(
-                            sorted(canonical_json(value) for value in values)
-                        ),
-                    )
-                )
-            elif values:
-                _add_fact(
-                    _fact(
-                        _EXTENSION_PREDICATES[predicate_name],
-                        term,
-                        next(iter(values)),
-                    ),
-                    facts_by_key,
-                )
-                predicates.add(predicate_name)
+            _emit_scalar(
+                attribute,
+                values,
+                predicate_name,
+                field_id,
+                term,
+                facts_by_key,
+                predicates,
+                conflict,
+            )
 
         mapped.append(
             MappedElement(
@@ -1133,7 +1097,12 @@ def _emit_scalar(
                 identifier=field_id,
                 detail=f"field {attribute} has conflicting values",
                 choices=tuple(
-                    sorted(canonical_json(Atom(value=value)) for value in values)
+                    sorted(
+                        canonical_json(
+                            value if isinstance(value, Atom) else Atom(value=value)
+                        )
+                        for value in values
+                    )
                 ),
             )
         )

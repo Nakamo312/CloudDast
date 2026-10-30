@@ -32,12 +32,14 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.qdl.reasoning import derivable
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.budget import CallLimits
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
 from cloud_dast.runtime.deficits import (
     grounding_result_closes_deficit,
     witness_deficits,
 )
 from cloud_dast.runtime.deficits.queue import DeficitQueue
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.config import GrounderOptions
@@ -46,7 +48,6 @@ from cloud_dast.runtime.grounding.reactive import Followup
 from cloud_dast.runtime.grounding.startup import Bootstrap
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,
@@ -218,8 +219,19 @@ def configure(tmp_path, method_spec, scenario_position):
     checker = Checker(
         target, GoalPayloadGenerator(TemplateGenerator()), AllowAllGuardrail(), bus
     )
-    runner = assemble_runner(checker, bus, events)
-    return repository, binder, request, runner, bus, events, checks, action
+    event_projection = EventProjection(bus, events)
+    runner = assemble_runner(checker, event_projection)
+    return (
+        repository,
+        binder,
+        request,
+        runner,
+        bus,
+        events,
+        checks,
+        action,
+        event_projection,
+    )
 
 
 def test_missing_carrier_blocks_before_setup_and_emits_one_graph_obligation(
@@ -227,7 +239,17 @@ def test_missing_carrier_blocks_before_setup_and_emits_one_graph_obligation(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, runner, _bus, events, checks, _action = configure(
+    (
+        repository,
+        binder,
+        request,
+        runner,
+        _bus,
+        events,
+        checks,
+        _action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -267,7 +289,17 @@ def test_live_workflow_repairs_carrier_but_echo_does_not_prove_sink(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, runner, bus, events, checks, action = configure(
+    (
+        repository,
+        binder,
+        request,
+        runner,
+        bus,
+        events,
+        checks,
+        action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -296,7 +328,7 @@ def test_live_workflow_repairs_carrier_but_echo_does_not_prove_sink(
         workflow = assemble_workflow(
             binder,
             runner,
-            FindingEvaluator(bus, events),
+            FindingEvaluator(event_projection),
             grounding=grounding.batches,
             lifecycle=grounding.lifecycle,
             source=grounding.source,
@@ -340,9 +372,17 @@ def test_proposal_role_does_not_close_carrier_obligation(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, _runner, _bus, _events, _checks, action = configure(
-        tmp_path, method_spec, scenario_position
-    )
+    (
+        repository,
+        binder,
+        request,
+        _runner,
+        _bus,
+        _events,
+        _checks,
+        action,
+        event_projection,
+    ) = configure(tmp_path, method_spec, scenario_position)
     try:
         binding = binder.bind(request, formal_proposal=False)
         deficit = witness_deficits(binding.execution.paths)[0]
@@ -365,7 +405,17 @@ def test_missing_flow_remains_deficit_without_invented_verdict(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, runner, bus, events, checks, action = configure(
+    (
+        repository,
+        binder,
+        request,
+        runner,
+        bus,
+        events,
+        checks,
+        action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -387,7 +437,7 @@ def test_missing_flow_remains_deficit_without_invented_verdict(
         workflow = assemble_workflow(
             binder,
             runner,
-            FindingEvaluator(bus, events),
+            FindingEvaluator(event_projection),
             grounding=grounding.batches,
             lifecycle=grounding.lifecycle,
             source=grounding.source,
@@ -424,7 +474,17 @@ def test_prerequisite_fanout_and_replay_preserve_repaired_path_retry_budget(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, runner, _bus, _events, checks, action = configure(
+    (
+        repository,
+        binder,
+        request,
+        runner,
+        _bus,
+        _events,
+        checks,
+        action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -479,7 +539,17 @@ def test_witness_fanout_reuses_bound_carrier_projection(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, _runner, _bus, _events, _checks, _action = configure(
+    (
+        repository,
+        binder,
+        request,
+        _runner,
+        _bus,
+        _events,
+        _checks,
+        _action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -511,7 +581,17 @@ def test_accepted_norm_sink_admits_carrier_consultation_before_observation(
     method_spec,
     scenario_position,
 ):
-    repository, binder, request, runner, bus, events, _checks, _action = configure(
+    (
+        repository,
+        binder,
+        request,
+        runner,
+        bus,
+        events,
+        _checks,
+        _action,
+        event_projection,
+    ) = configure(
         tmp_path,
         method_spec,
         scenario_position,
@@ -524,7 +604,7 @@ def test_accepted_norm_sink_admits_carrier_consultation_before_observation(
         workflow = assemble_workflow(
             binder,
             runner,
-            FindingEvaluator(bus, events),
+            FindingEvaluator(event_projection),
             options=LiveWorkflowOptions(
                 formal_repository=repository,
                 event_bus=bus,

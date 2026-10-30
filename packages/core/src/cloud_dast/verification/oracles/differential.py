@@ -13,13 +13,13 @@ from cloud_dast.model import (
     PolicyVerdict,
     VerdictStatus,
 )
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
     actions_align,
+    explain_mismatch,
 )
-from cloud_dast.verification.oracles.marker import response_is_incomplete
 from cloud_dast.verification.oracles.trace import ObservationTrace
+from cloud_dast.verification.witness import response_is_incomplete
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +59,7 @@ class DifferentialOracle:
             return self._unscoreable("invalid differential QDL norm")
         if norm is None or norm.primitive != "differential":
             return self._unscoreable("invariant is not a differential QDL norm")
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         if len(trace) not in {1, 2, 3}:
@@ -173,7 +173,7 @@ class DifferentialOracle:
                 "invariant is not a differential QDL norm",
                 model_id="differential-concurrency",
             )
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(
                 mismatch,

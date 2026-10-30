@@ -31,6 +31,7 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.events import DomainEvent
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.planning import IncrementalQdlPlanner
 from cloud_dast.verification.oracles.grounded import (
@@ -278,10 +279,10 @@ def test_stf_chain_executes_ordinary_create_before_unpaid_shipment(
     )
     checker = Checker(target, generator, AllowAllGuardrail(), bus)
     service_workflow = checker
+    event_projection = EventProjection(bus, events)
     runner = assemble_runner(
         service_workflow,
-        bus,
-        events,
+        event_projection,
         grounded_oracle=GroundedOutcomeOracle(),
         primitive_oracle=PrimitiveOracleRouter(),
         formal_repository=repository,
@@ -374,9 +375,9 @@ def test_stf_chain_executes_ordinary_create_before_unpaid_shipment(
     ]
     assert shipped_attacker_orders
 
-    from cloud_dast.verification.finding_evaluator import FindingEvaluator
+    from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 
-    evaluation = FindingEvaluator(bus, events).evaluate(
+    evaluation = FindingEvaluator(event_projection).evaluate(
         execution, binding.execution.invariants
     )
     ship_findings = [

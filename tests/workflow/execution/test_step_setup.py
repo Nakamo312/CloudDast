@@ -20,6 +20,7 @@ from cloud_dast.model import (
 )
 from cloud_dast.model.events import DomainEvent, QdlPathEvaluated, QdlStepEvaluated
 from cloud_dast.runtime.budget import CallLimits
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast_fuzzing import TemplateGenerator
@@ -74,7 +75,9 @@ def _ordinary_runner(*, guardrail=None, repository=None, witness=True):
         guardrail or AllowAllGuardrail(),
         events,
     )
-    runner = assemble_runner(service, events, events, formal_repository=repository)
+    runner = assemble_runner(
+        service, EventProjection(events, events), formal_repository=repository
+    )
     request = LiveRequest(
         service="widgets", principal_id="actor", resource_id="launch-context"
     )

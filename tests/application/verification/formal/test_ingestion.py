@@ -4,13 +4,13 @@ from typing import Any
 
 import pytest
 
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.ports import (
     GraphEdge,
     GraphNode,
     ServiceGraphSlice,
 )
 from cloud_dast.qdl.graph import QdlGraph
+from cloud_dast.runtime.ingestion import ContractImporter
 from cloud_dast.verification.contract_projection import (
     ClassificationProfile,
     ContractProjector,
@@ -126,7 +126,7 @@ def graph_slice() -> ServiceGraphSlice:
 
 def test_ingestion_projects_and_persists_contract_slice(graph_slice) -> None:
     repository = FakeFormalRepository()
-    service = QdlIngestionService(FakeContractGraph(graph_slice), repository)
+    service = ContractImporter(FakeContractGraph(graph_slice), repository)
 
     result = service.ingest("lockbox")
 
@@ -142,9 +142,7 @@ def test_ingestion_projects_and_persists_contract_slice(graph_slice) -> None:
 
 
 def test_ingestion_rejects_empty_service(graph_slice) -> None:
-    service = QdlIngestionService(
-        FakeContractGraph(graph_slice), FakeFormalRepository()
-    )
+    service = ContractImporter(FakeContractGraph(graph_slice), FakeFormalRepository())
 
     with pytest.raises(ValueError, match="service must not be empty"):
         service.ingest("   ")
@@ -184,7 +182,7 @@ def test_ingestion_projects_classification_profile(graph_slice) -> None:
         }
     )
     repository = FakeFormalRepository()
-    service = QdlIngestionService(
+    service = ContractImporter(
         FakeContractGraph(graph_slice),
         repository,
         classification_profile=ClassificationProfile(roles={"secret": ("sensitive",)}),
@@ -210,7 +208,7 @@ def test_ingestion_rejects_projector_and_classification_profile(graph_slice) -> 
         ValueError,
         match="classification_profile cannot override an explicit projector",
     ):
-        QdlIngestionService(
+        ContractImporter(
             FakeContractGraph(graph_slice),
             FakeFormalRepository(),
             projector=ContractProjector(),

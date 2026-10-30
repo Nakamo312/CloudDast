@@ -31,6 +31,7 @@ from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
 from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.differential.executor import ProbeExecutor
 from cloud_dast.runtime.execution import BoundPathRunner
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import (
     Checker,
     PartialExecutionError,
@@ -105,8 +106,7 @@ def _runner(target: PairTarget) -> BoundPathRunner:
     service = checker
     return assemble_runner(
         service,
-        events,
-        events,
+        EventProjection(events, events),
     )
 
 

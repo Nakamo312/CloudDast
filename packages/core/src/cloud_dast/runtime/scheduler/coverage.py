@@ -6,7 +6,7 @@ from cloud_dast.contracts.plan import QdlExecutionPath, QdlExecutionStep
 from cloud_dast.model.events import normalize_action
 from cloud_dast.qdl.graph import canonical_json
 from cloud_dast.runtime.scheduler.model import CoverageKey
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 
 
 def keys_for(path: QdlExecutionPath) -> tuple[CoverageKey, ...]:

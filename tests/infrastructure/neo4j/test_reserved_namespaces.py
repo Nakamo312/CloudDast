@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.ports import ServiceGraphSlice
 from cloud_dast.qdl.graph import QdlGraph
+from cloud_dast.runtime.ingestion import ContractImporter
 
 
 class FakeContractGraph:
@@ -57,7 +57,7 @@ class FakeFormalRepository:
 )
 def test_ingestion_rejects_reserved_runtime_namespaces(source_id: str) -> None:
     repository = FakeFormalRepository()
-    service = QdlIngestionService(FakeContractGraph(), repository)
+    service = ContractImporter(FakeContractGraph(), repository)
 
     with pytest.raises(ValueError, match="reserved runtime namespace"):
         service.ingest("lockbox", source_id=source_id)
@@ -67,7 +67,7 @@ def test_ingestion_rejects_reserved_runtime_namespaces(source_id: str) -> None:
 
 def test_ingestion_allows_explicit_contract_namespace() -> None:
     repository = FakeFormalRepository()
-    service = QdlIngestionService(FakeContractGraph(), repository)
+    service = ContractImporter(FakeContractGraph(), repository)
 
     result = service.ingest("lockbox", source_id="contract:lockbox")
 

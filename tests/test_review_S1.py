@@ -195,7 +195,7 @@ def test_complete_scope_grounds_foreign_resource_as_denied(tmp_path):
         VerdictStatus,
     )
     from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
-    from cloud_dast.verification.norm_view import NormView
+    from cloud_dast.verification.norms import NormView
     from cloud_dast.verification.oracles import GroundedOutcomeOracle
 
     repo = repository(

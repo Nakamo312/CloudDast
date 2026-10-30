@@ -69,6 +69,7 @@ from cloud_dast.qdl.reasoning import QdlSubgoal
 from cloud_dast.qdl.state_machine import (
     state_machine_graph,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign import (
     BoundPathRunner,
@@ -83,6 +84,7 @@ from cloud_dast.runtime.deficits import (
 )
 from cloud_dast.runtime.deficits.queue import DeficitQueue
 from cloud_dast.runtime.evidence_gate import Gate
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.runtime.grounding.config import GrounderOptions
@@ -97,9 +99,9 @@ from cloud_dast.verification.contract_projection import (
 from cloud_dast.verification.evidence_facts import verified_fact_id
 from cloud_dast.verification.oracles import (
     GroundedOutcomeOracle,
-    OobOracle,
     PrimitiveOracleRouter,
 )
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,
@@ -122,16 +124,20 @@ def _workflow(
     finding_evaluator,
     grounding=None,
     *,
+    oob_collector=None,
     lifecycle=None,
     source=None,
     variance=None,
     options=None,
 ) -> LiveWorkflow:
+    if isinstance(path_runner, BoundPathRunner):
+        assert path_runner._projection is finding_evaluator._projection
     return assemble_workflow(
         scenario_binder,
         path_runner,
         finding_evaluator,
         grounding,
+        oob_collector=oob_collector,
         lifecycle=lifecycle,
         source=source,
         variance=variance,
@@ -439,32 +445,21 @@ class _StaticOobUrls:
         return f"https://collaborator.test/{marker}"
 
 
-class _LateOobRunner(BoundPathRunner):
-    """Deliver one late OOB callback at the campaign-final sweep boundary."""
+class _LateOobCollector(oob.Coordinator):
+    """Deliver a late callback at the actual runtime sweep boundary."""
 
-    def __init__(
-        self,
-        service_workflow,
-        event_bus,
-        event_store,
-        *,
-        oob_events,
-        target,
-        **kwargs,
-    ) -> None:
-        assembled = assemble_runner(service_workflow, event_bus, event_store, **kwargs)
-        super().__init__(**vars(assembled))
+    def __init__(self, events, target):
+        super().__init__(events, verification_oob.Oracle(), wait_seconds=0.0)
         self.target = target
-        self.oob_events = oob_events
 
-    def reevaluate_oob_pending(self, *, timeout=None):
+    def reevaluate_pending(self, *, timeout=None):
         marker = self.target.marker
         if marker is None:
             return {}
-        self.oob_events.record(
+        self._events.record(
             EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
         )
-        return super().reevaluate_oob_pending(timeout=0.0)
+        return super().reevaluate_pending(timeout=0.0)
 
 
 class StateTransitionTarget:
@@ -552,6 +547,7 @@ def test_live_workflow_executes_accepted_qdl_norm(
     bus = _event_bus(events)
     service = _service((method_spec,), _allowed_target, bus)
     scenario_repo = ScenarioRepo(scenario_position)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((method_spec,)),
@@ -561,13 +557,12 @@ def test_live_workflow_executes_accepted_qdl_norm(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
     )
 
     result = workflow.execute(
@@ -622,16 +617,13 @@ def test_live_workflow_final_sweep_reevaluates_late_oob_callback(
         AllowAllGuardrail(),
         bus,
     )
-    runner = _LateOobRunner(
+    event_projection = EventProjection(bus, events)
+    collector = _LateOobCollector(oob_events, target)
+    runner = assemble_runner(
         checker,
-        bus,
-        events,
-        primitive_oracle=PrimitiveOracleRouter(
-            oob_oracle=OobOracle(oob_events, wait_seconds=0.0)
-        ),
+        event_projection,
+        primitive_oracle=PrimitiveOracleRouter(oob_oracle=collector),
         formal_repository=repository,
-        target=target,
-        oob_events=oob_events,
     )
     workflow = _workflow(
         ScenarioBinder(
@@ -641,7 +633,8 @@ def test_live_workflow_final_sweep_reevaluates_late_oob_callback(
             qdl_planner=IncrementalQdlPlanner(),
         ),
         runner,
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
+        oob_collector=collector,
     )
 
     result = workflow.execute(
@@ -678,10 +671,10 @@ def test_concurrency_mode_saves_evidence_for_changed_norms(
     bus = _event_bus(events)
     bus.subscribe(DiffPairComputed, events.append)
     service = _service((method_spec,), _allowed_target, bus)
+    event_projection = EventProjection(bus, events)
     runner = assemble_runner(
         service,
-        bus,
-        events,
+        event_projection,
         grounded_oracle=GroundedOutcomeOracle(),
         primitive_oracle=PrimitiveOracleRouter(),
         formal_repository=repository,
@@ -694,7 +687,7 @@ def test_concurrency_mode_saves_evidence_for_changed_norms(
             qdl_planner=IncrementalQdlPlanner(),
         ),
         runner,
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         options=LiveWorkflowOptions(
             diff_mode=True,
             diff_modes=frozenset({"concurrency"}),
@@ -751,6 +744,7 @@ def test_live_workflow_execution_does_not_imply_oracle_coverage(
     )
     events = EventLog()
     bus = _event_bus(events)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((method_spec,)),
@@ -760,13 +754,12 @@ def test_live_workflow_execution_does_not_imply_oracle_coverage(
         ),
         assemble_runner(
             _service((method_spec,), _allowed_target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
     )
 
     result = workflow.execute(
@@ -1390,6 +1383,7 @@ def test_forbidden_state_path_without_state_evidence_is_unscoreable(
     for event_type in (QdlPathEvaluated, QdlStepEvaluated):
         bus.subscribe(event_type, events.append)
     service = _service(methods, _allowed_target, bus)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -1399,13 +1393,12 @@ def test_forbidden_state_path_without_state_evidence_is_unscoreable(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
     )
 
     result = workflow.execute(
@@ -1518,6 +1511,7 @@ def test_readback_transition_does_not_prove_the_following_write(
     bus.subscribe(DiffPairComputed, events.append)
     target = ReadBackStateTarget(ship_method.method_id)
     service = _service(methods, target, bus)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -1527,13 +1521,12 @@ def test_readback_transition_does_not_prove_the_following_write(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         options=LiveWorkflowOptions(
             diff_mode=True,
             diff_modes=frozenset({"readback"}),
@@ -1628,6 +1621,7 @@ def test_forbidden_state_transition_with_state_evidence_fails(
         StateTransitionTarget((("created", "approved"), ("approved", "shipped"))),
         bus,
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -1637,13 +1631,12 @@ def test_forbidden_state_transition_with_state_evidence_fails(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
     )
 
     result = workflow.execute(
@@ -1961,6 +1954,7 @@ def test_live_workflow_executes_paths_while_grounding_is_running(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -1970,13 +1964,12 @@ def test_live_workflow_executes_paths_while_grounding_is_running(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -2076,6 +2069,7 @@ def test_generic_allowed_path_executes_before_grounding_completion(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((get_user,)),
@@ -2085,13 +2079,12 @@ def test_generic_allowed_path_executes_before_grounding_completion(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -2161,6 +2154,7 @@ def test_live_workflow_rounds_are_idempotent_for_unchanged_paths(
         reactive=grounding_component_1,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -2170,13 +2164,12 @@ def test_live_workflow_rounds_are_idempotent_for_unchanged_paths(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -2370,6 +2363,7 @@ def _diff_campaign(
         adapter_version="contract-projection-v1",
     )
     service = _service(methods, target or _allowed_target, bus)
+    event_projection = EventProjection(bus, events)
     return _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -2379,13 +2373,12 @@ def _diff_campaign(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches if grounding is not None else None,
         lifecycle=grounding.lifecycle if grounding is not None else None,
         source=grounding.source if grounding is not None else None,
@@ -3173,7 +3166,7 @@ def _observation_gate_workflow() -> LiveWorkflow:
     grounding = make_grounding(FormalRepository())
     return assemble_workflow(
         None,
-        Mock(spec=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
@@ -3367,7 +3360,7 @@ def _dataflows_gate_workflow(repository=None) -> LiveWorkflow:
     grounding = make_grounding(repository or FormalRepository())
     return assemble_workflow(
         None,
-        Mock(spec=assemble_runner(Mock(), Mock(), Mock())),
+        Mock(spec=assemble_runner(Mock(), EventProjection(Mock(), Mock()))),
         None,
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
@@ -3538,6 +3531,7 @@ def test_missing_irreversibility_without_observation_still_consults(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((create_method, update_method)),
@@ -3547,13 +3541,12 @@ def test_missing_irreversibility_without_observation_still_consults(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -3629,6 +3622,7 @@ def test_evidence_deficit_carries_deterministic_sibling_actions(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((create_method, update_method)),
@@ -3638,13 +3632,12 @@ def test_evidence_deficit_carries_deterministic_sibling_actions(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -3709,6 +3702,7 @@ def test_missing_irreversibility_with_observation_still_consults_model(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((create_method, update_method)),
@@ -3718,13 +3712,12 @@ def test_missing_irreversibility_with_observation_still_consults_model(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -3848,6 +3841,7 @@ def test_reactive_grounding_closes_deficit_and_executes_new_path(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -3857,13 +3851,12 @@ def test_reactive_grounding_closes_deficit_and_executes_new_path(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -3963,6 +3956,7 @@ def test_irrelevant_promotion_does_not_buy_a_retry(
         reactive=axis_grounding,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -3972,13 +3966,12 @@ def test_irrelevant_promotion_does_not_buy_a_retry(
         ),
         assemble_runner(
             _service(methods, target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4073,17 +4066,17 @@ def test_response_shape_grounding_promotes_and_binds_response_norm(
         repository,
         qdl_planner=IncrementalQdlPlanner(),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         binder,
         assemble_runner(
             _service((get_user,), target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4108,7 +4101,7 @@ def test_response_shape_grounding_promotes_and_binds_response_norm(
     assert len(reactive_requests) == 1
     evidence_leaf = reactive_requests[0].context["evidence"]["response"]["leaves"][0]
     assert evidence_leaf["path"] == "email"
-    assert evidence_leaf["value"]["evidence_encoding"] == "redacted"
+    assert evidence_leaf["value"] == "response-value"
 
     promoted = next(
         item
@@ -4213,6 +4206,7 @@ def test_response_semantics_timeout_is_isolated_without_retry(
         reactive=reactive,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -4222,13 +4216,12 @@ def test_response_semantics_timeout_is_isolated_without_retry(
         ),
         assemble_runner(
             _service(methods, target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4333,6 +4326,7 @@ def test_reactive_grounding_preserves_cancellation_signal(
         reactive=reactive,
         promotion_policy=PromotionPolicy(enabled=True),
     )
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((get_user,)),
@@ -4342,13 +4336,12 @@ def test_reactive_grounding_preserves_cancellation_signal(
         ),
         assemble_runner(
             _service((get_user,), target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4488,6 +4481,7 @@ def test_fair_share_balances_deficit_classes_after_roles_work(
         promotion_policy=PromotionPolicy(enabled=True),
     )
     scenario_repository = OwnerScenarioRepo(scenario_position, owner_position)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -4497,13 +4491,12 @@ def test_fair_share_balances_deficit_classes_after_roles_work(
         ),
         assemble_runner(
             _service(methods, target, bus),
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4615,6 +4608,7 @@ def test_skip_mode_terminates_with_pending_deficits(
         promotion_policy=PromotionPolicy(enabled=True),
     )
     assert grounding.batches.reactive_capable is False
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo(methods),
@@ -4624,13 +4618,12 @@ def test_skip_mode_terminates_with_pending_deficits(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
         grounding=grounding.batches,
         lifecycle=grounding.lifecycle,
         source=grounding.source,
@@ -4672,6 +4665,7 @@ def test_rerun_into_same_event_log_is_visible_replay(
     for event_type in (QdlStepEvaluated, QdlPathEvaluated):
         bus.subscribe(event_type, events.append)
     service = _service((method_spec,), _allowed_target, bus)
+    event_projection = EventProjection(bus, events)
     workflow = _workflow(
         ScenarioBinder(
             MethodRepo((method_spec,)),
@@ -4681,13 +4675,12 @@ def test_rerun_into_same_event_log_is_visible_replay(
         ),
         assemble_runner(
             service,
-            bus,
-            events,
+            event_projection,
             grounded_oracle=GroundedOutcomeOracle(),
             primitive_oracle=PrimitiveOracleRouter(),
             formal_repository=repository,
         ),
-        FindingEvaluator(bus, events),
+        FindingEvaluator(event_projection),
     )
     request = LiveRequest(
         service=method_spec.service,

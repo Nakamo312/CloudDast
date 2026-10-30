@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
-from dishka import Provider, provide
+from dishka import Provider, alias, provide
 from hypothesis.database import InMemoryExampleDatabase
 
 import cloud_dast.composition.runtime as runtime_composition
 from cloud_dast.candidates import TemplateGenerator
 from cloud_dast.composition.execution import assemble_runner
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.composition.grounding import ServiceOptions
 from cloud_dast.composition.profile import (
     classification_profile_from_environment,
@@ -99,6 +98,7 @@ from cloud_dast.ports import (
     Guardrail,
     MethodRepository,
     ModelClient,
+    OobEvaluator,
     OobUrlFactory,
     ReportPublisher,
     ScenarioRepository,
@@ -114,34 +114,37 @@ from cloud_dast.qdl.reasoning import QdlSubgoal, derivable
 from cloud_dast.qdl.threat_compiler import (
     ThreatIntentCompiler,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.runtime.binding import ScenarioBinder
 from cloud_dast.runtime.campaign import (
     BoundPathRunner,
     LiveWorkflow,
 )
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.runtime import LiveWorkflowOptions
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.grounding import BatchFlow
 from cloud_dast.runtime.grounding.lifecycle import RunCoordinator
 from cloud_dast.runtime.grounding.promotion import PromotionPolicy
 from cloud_dast.runtime.grounding.source import Loader
 from cloud_dast.runtime.grounding.variance import DifferentialFlow
+from cloud_dast.runtime.ingestion import ContractImporter
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.planning import IncrementalQdlPlanner, QdlPlanner
 from cloud_dast.verification.differential.contracts import (
     IsolatedStandPolicy,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from cloud_dast.verification.oracles import (
     FieldExposureOracle,
     GroundedOutcomeOracle,
     LatencyBaseline,
     LatencyOracle,
     MarkerOracle,
-    OobOracle,
     PrimitiveOracleRouter,
     SequenceOracle,
 )
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.projection import ObservationProjector
 
 
@@ -514,6 +517,8 @@ class RunProvider(Provider):
     architecture.
     """
 
+    oob_evaluator = alias(oob.Coordinator, provides=OobEvaluator)
+
     def __init__(
         self,
         model_client: ModelClient | None = None,
@@ -736,13 +741,24 @@ class RunProvider(Provider):
         return InMemoryExampleDatabase()
 
     @provide(scope=RunScope, provides=OobUrlFactory)
-    def oob_url_factory(self, events: EvidenceChannel) -> OobUrlFactory:
-        return OobCollaborator(events)
+    def oob_url_factory(self, events: EvidenceChannel) -> Iterator[OobUrlFactory]:
+        collaborator = OobCollaborator(events)
+        try:
+            yield collaborator
+        finally:
+            collaborator.stop()
 
     @provide(scope=RunScope)
-    def oob_oracle(self, events: EvidenceChannel) -> OobOracle:
-        return OobOracle(
+    def oob_oracle(self) -> verification_oob.Oracle:
+        return verification_oob.Oracle()
+
+    @provide(scope=RunScope)
+    def oob_coordinator(
+        self, events: EvidenceChannel, oracle: verification_oob.Oracle
+    ) -> oob.Coordinator:
+        return oob.Coordinator(
             events,
+            oracle,
             wait_seconds=float(os.environ.get("CLOUD_DAST_OOB_WAIT_SECONDS", "1.0")),
         )
 
@@ -759,7 +775,7 @@ class RunProvider(Provider):
         field_exposure_oracle: FieldExposureOracle,
         latency_oracle: LatencyOracle,
         marker_oracle: MarkerOracle,
-        oob_oracle: OobOracle,
+        oob_evaluator: OobEvaluator,
         sequence_oracle: SequenceOracle,
     ) -> PrimitiveOracleRouter:
         return PrimitiveOracleRouter(
@@ -767,7 +783,7 @@ class RunProvider(Provider):
             field_oracle=field_exposure_oracle,
             latency_oracle=latency_oracle,
             marker_oracle=marker_oracle,
-            oob_oracle=oob_oracle,
+            oob_oracle=oob_evaluator,
             sequence_oracle=sequence_oracle,
         )
 
@@ -821,6 +837,7 @@ class RunProvider(Provider):
         scenario_binder: ScenarioBinder,
         path_runner: BoundPathRunner,
         finding_evaluator: FindingEvaluator,
+        oob_coordinator: oob.Coordinator,
         grounding: BatchFlow,
         lifecycle: RunCoordinator,
         source: Loader,
@@ -831,6 +848,7 @@ class RunProvider(Provider):
             scenario_binder,
             path_runner,
             finding_evaluator,
+            oob_collector=oob_coordinator,
             grounding=grounding,
             lifecycle=lifecycle,
             source=source,
@@ -843,8 +861,8 @@ class RunProvider(Provider):
         self,
         contract_graph: ContractGraphRepository,
         formal_repository: FormalRepository,
-    ) -> QdlIngestionService:
-        return QdlIngestionService(
+    ) -> ContractImporter:
+        return ContractImporter(
             contract_graph,
             formal_repository,
             classification_profile=classification_profile_from_environment(),
@@ -921,7 +939,7 @@ class RunProvider(Provider):
             model_id = f"{model_id} (grounding skipped)"
         campaign_metrics.set_model_id(model_id)
 
-        ingestion = QdlIngestionService(
+        ingestion = ContractImporter(
             contract_graph_repository,
             formal_repository,
             classification_profile=classification_profile_from_environment(),
@@ -1018,8 +1036,7 @@ class RunProvider(Provider):
     def bound_path_runner(
         self,
         checker: Checker,
-        event_bus: EventPublisher,
-        event_store: EventStore,
+        event_projection: EventProjection,
         grounded_outcome_oracle: GroundedOutcomeOracle,
         primitive_oracle_router: PrimitiveOracleRouter,
         formal_repository: FormalRepository,
@@ -1032,8 +1049,7 @@ class RunProvider(Provider):
     ) -> BoundPathRunner:
         return assemble_runner(
             checker,
-            event_bus,
-            event_store,
+            event_projection,
             grounded_oracle=grounded_outcome_oracle,
             primitive_oracle=primitive_oracle_router,
             formal_repository=formal_repository,
@@ -1076,12 +1092,16 @@ class RunProvider(Provider):
         return factory() if factory is not None else None  # type: ignore[return-value]
 
     @provide(scope=RunScope)
-    def finding_evaluator(
+    def event_projection(
         self,
         event_bus: EventPublisher,
         event_store: EventStore,
-    ) -> FindingEvaluator:
-        return FindingEvaluator(event_bus, event_store)
+    ) -> EventProjection:
+        return EventProjection(event_bus, event_store)
+
+    @provide(scope=RunScope)
+    def finding_evaluator(self, event_projection: EventProjection) -> FindingEvaluator:
+        return FindingEvaluator(event_projection)
 
     @provide(scope=RunScope, provides=ReportPublisher)
     def report_publisher(self, event_bus: EventPublisher) -> ReportPublisher:
@@ -1128,7 +1148,7 @@ class RunProvider(Provider):
         self,
         live_workflow: LiveWorkflow,
         event_bus: EventPublisher,
-        formal_ingestion_service: QdlIngestionService,
+        formal_ingestion_service: ContractImporter,
         advisory_pre_scan: AdvisoryPreScanService,
         campaign_metrics: CampaignMetrics,
     ) -> runtime_composition.CloudDastRuntime:

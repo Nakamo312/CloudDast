@@ -10,7 +10,6 @@ import pytest
 
 import cloud_dast
 from cloud_dast.composition.app_provider import FileContractGraphRepository
-from cloud_dast.composition.formal_ingestion import QdlIngestionService
 from cloud_dast.infrastructure.sqlite import SqliteFormalRepository
 from cloud_dast.model.events import canonical_action_id
 from cloud_dast.qdl.graph import (
@@ -23,6 +22,7 @@ from cloud_dast.qdl.graph import (
     Variable,
 )
 from cloud_dast.qdl.graph_ops import merge_graphs
+from cloud_dast.runtime.ingestion import ContractImporter
 
 
 def graph(name: str) -> QdlGraph:
@@ -84,7 +84,7 @@ def test_real_file_ingestion_reselects_previous_content(tmp_path):
                     }
                 )
             )
-            result = QdlIngestionService(
+            result = ContractImporter(
                 FileContractGraphRepository(manifest), repo
             ).ingest("svc")
             hashes.append(result.graph_hash)

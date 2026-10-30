@@ -17,17 +17,18 @@ from cloud_dast.model import (
 from cloud_dast.model.events import CheckCompleted, EventScope, QdlStepEvaluated
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, changed
 from cloud_dast.runtime.budget import CallLimits
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.differential.evidence import (
     MeasurementKey,
     Store,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.state import CampaignAccumulator
 from cloud_dast.verification.differential.contracts import (
     ConcurrencyResult,
     ReadBackResult,
     ReadBackSpec,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from tests.test_review_C1 import EventLog, _runner, _step, _view
 from tests.workflow.execution.test_differential_modes import (
     _get_method,
@@ -360,7 +361,7 @@ def test_promoted_norms_share_one_physical_readback_without_target_reruns(
             observation=captured.measured.write,
         )
     )
-    evaluator = FindingEvaluator(log, log)
+    evaluator = FindingEvaluator(EventProjection(log, log))
     assert evaluator.evaluate(execution, {}).findings == ()
     findings = evaluator.evaluate(
         execution, {norm.invariant_id: norm for norm in captured.norms}
@@ -420,7 +421,7 @@ def test_readback_reinterpretation_rejects_foreign_actual_check(
     rejected_execution.add(rejected)
     log = EventLog()
     assert (
-        FindingEvaluator(log, log)
+        FindingEvaluator(EventProjection(log, log))
         .evaluate(
             rejected_execution.as_result(),
             {norm.invariant_id: norm for norm in captured.norms},
@@ -455,7 +456,7 @@ def test_missing_before_channel_blocks_only_second_promoted_norm(physical_readba
     accumulator.add(metadata)
     log = EventLog()
     findings = (
-        FindingEvaluator(log, log)
+        FindingEvaluator(EventProjection(log, log))
         .evaluate(
             accumulator.as_result(),
             {norm.invariant_id: norm for norm in captured.norms},

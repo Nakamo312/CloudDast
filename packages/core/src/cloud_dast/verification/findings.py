@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+from cloud_dast.contracts.candidate_metrics import request_complexity
+from cloud_dast.contracts.execution import ExecutionResult
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     Check,
@@ -14,6 +18,7 @@ from cloud_dast.model import (
 )
 from cloud_dast.qdl.graph import Struct
 from cloud_dast.qdl.graph_ops import atom_value
+from cloud_dast.verification.norms import NormCompiler
 from cloud_dast.verification.taxonomy import (
     DEFAULT_CATALOG,
     ClassificationFacts,
@@ -146,7 +151,112 @@ def finding_from_observation(
     )
 
 
+def collect(
+    execution: ExecutionResult,
+    invariants: Mapping[str, InvariantProjection],
+    checks: Mapping[str, Check],
+    classification_facts: ClassificationFacts,
+) -> tuple[Finding, ...]:
+    """Collect and merge findings admitted by the current norm registry."""
+
+    findings: dict[tuple[str, str, tuple[str, ...], tuple[str, ...], str], Finding] = {}
+    observations_by_id = {
+        observation.observation_id: observation
+        for observation in execution.observations
+    }
+    for evaluation_key, observation_provenance in execution.provenance.items():
+        observation_id, invariant_id = evaluation_key
+        observation = observations_by_id.get(observation_id)
+        if observation is None or observation_provenance.invariant_id != invariant_id:
+            continue
+        check = checks.get(observation.check_id)
+        if check is None:
+            continue
+        invariant = invariants.get(observation_provenance.invariant_id)
+        if invariant is None or invariant.norm_fact is None:
+            continue
+        policy_verdict = execution.policy_verdicts.get(evaluation_key)
+        if not isinstance(policy_verdict, PolicyVerdict):
+            continue
+        if not (
+            policy_verdict.status is VerdictStatus.FAIL
+            and policy_verdict.deterministic
+            and policy_verdict.grounded
+            and any((ref in observations_by_id for ref in policy_verdict.evidence_refs))
+        ):
+            continue
+        try:
+            norm = NormCompiler().compile(invariant.norm_fact)
+        except ValueError:
+            continue
+        if norm.verdict_policy != "deterministic":
+            continue
+        finding = finding_from_observation(
+            check,
+            observation,
+            invariant,
+            title=f"Security policy violated: {invariant.invariant_id}",
+            description=invariant.statement,
+            remediation="Review and enforce the invariant's security policy.",
+            verdict=policy_verdict.status,
+            goal_id=observation_provenance.goal_id,
+            path_id=observation_provenance.path_id,
+            step_id=observation_provenance.step_id,
+            rationale=policy_verdict.rationale,
+            minimal_poc=execution.minimal_checks.get(evaluation_key, check).request,
+            confidence=policy_verdict.confidence,
+            evidence_refs=policy_verdict.evidence_refs,
+            policy_verdict=policy_verdict,
+            classification_facts=classification_facts,
+        )
+        fingerprint = finding.fingerprint
+        if fingerprint is None:
+            raise ValueError("finding evaluator requires a finding fingerprint")
+        key = fingerprint.key
+        existing = findings.get(key)
+        if existing is None:
+            findings[key] = finding
+        else:
+            findings[key] = merge_finding_witnesses(existing, finding)
+    return tuple(findings.values())
+
+
+def merge_finding_witnesses(finding: Finding, witness: Finding) -> Finding:
+    """Merge a repeated FAIL into the first finding for one fingerprint."""
+
+    witness_refs = witness.evidence_refs or (witness.observation_id,)
+    evidence_refs = tuple(dict.fromkeys((*finding.evidence_refs, *witness_refs)))
+    minimal_poc = select_minimal_poc(finding.minimal_poc, witness.minimal_poc)
+    if evidence_refs == finding.evidence_refs and minimal_poc == finding.minimal_poc:
+        return finding
+    return finding.model_copy(
+        update={"evidence_refs": evidence_refs, "minimal_poc": minimal_poc}
+    )
+
+
+def select_minimal_poc(
+    current: tuple[tuple[str, JsonValue], ...] | None,
+    candidate: tuple[tuple[str, JsonValue], ...] | None,
+) -> tuple[tuple[str, JsonValue], ...] | None:
+    """Return the shorter of two reproducing request payloads."""
+
+    if current is None:
+        return candidate
+    if candidate is None:
+        return current
+    if _poc_size(candidate) < _poc_size(current):
+        return candidate
+    return current
+
+
+def _poc_size(poc: tuple[tuple[str, JsonValue], ...]) -> tuple[int, int]:
+    return (request_complexity(poc), len(poc))
+
+
 __all__ = [
+    "collect",
+    "merge_finding_witnesses",
+    "select_minimal_poc",
     "attach_finding_identity",
     "finding_fingerprint",
     "finding_from_observation",

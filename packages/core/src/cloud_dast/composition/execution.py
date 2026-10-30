@@ -14,8 +14,6 @@ from cloud_dast.extensions import (
 )
 from cloud_dast.model import Observation
 from cloud_dast.ports import (
-    EventPublisher,
-    EventStore,
     FindingExampleStore,
     FormalRepository,
 )
@@ -79,14 +77,14 @@ class BoundPathRunnerOptions:
 
 def assemble_runner(
     checker: Checker,
-    event_bus: EventPublisher,
-    event_store: EventStore,
+    events: EventProjection,
     options: BoundPathRunnerOptions | None = None,
     **legacy_options: object,
 ) -> BoundPathRunner:
     """Build one execution graph without storing assembly state on its runner."""
 
     settings = BoundPathRunnerOptions.from_legacy(options, legacy_options)
+    event_bus = events.publisher
     execute_call = partial(execute_call_fn, checker, event_bus)
     primitive_oracle = settings.primitive_oracle or PrimitiveOracleRouter(
         grounded_oracle=settings.grounded_oracle
@@ -94,7 +92,6 @@ def assemble_runner(
     compiler = NormCompiler()
     projector = settings.observation_projector or ObservationProjector()
     paths: dict[str, QdlExecutionPath] = {}
-    events = EventProjection(event_bus, event_store)
     candidates, prefilter = _assemble_candidates(
         checker, events, execute_call, settings
     )
@@ -143,7 +140,6 @@ def assemble_runner(
         round_runner,
         differential,
         readback,
-        primitive_oracle,
     )
 
 

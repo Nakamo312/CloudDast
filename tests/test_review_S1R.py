@@ -22,7 +22,8 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.oracles import PrimitiveOracleRouter
 
 ACTION = "grpc:svc.Get"
@@ -159,7 +160,9 @@ def test_actual_resource_binding_preserves_scoped_policy(
         },
         policy_verdicts={(observation.observation_id, NORM.invariant_id): verdict},
     )
-    result = FindingEvaluator(log, log).evaluate(execution, {NORM.invariant_id: NORM})
+    result = FindingEvaluator(EventProjection(log, log)).evaluate(
+        execution, {NORM.invariant_id: NORM}
+    )
     assert len(result.findings) == findings
 
 
@@ -218,7 +221,7 @@ def test_actual_resource_binding_cannot_inherit_another_resources_deny(tmp_path)
     )
     assert not verdict.grounded
     log = EventLog()
-    result = FindingEvaluator(log, log).evaluate(
+    result = FindingEvaluator(EventProjection(log, log)).evaluate(
         ExecutionResult(
             observations=(observation,),
             checks=(check,),

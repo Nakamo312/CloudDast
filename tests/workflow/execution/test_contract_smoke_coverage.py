@@ -29,6 +29,7 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.reasoning import QdlInvariant, QdlPlan
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.view import build
 from cloud_dast.runtime.planning import IncrementalQdlPlanner, declared_action_ids
@@ -237,8 +238,7 @@ def test_contract_smoke_path_executes_but_stays_unscoreable(
     )
     runner = assemble_runner(
         checker,
-        events,
-        events,
+        EventProjection(events, events),
     )
 
     result = runner.execute_plan(

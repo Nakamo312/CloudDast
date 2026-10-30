@@ -17,12 +17,13 @@ from cloud_dast.model.events import (
     PhaseChanged,
 )
 from cloud_dast.ports import EventPublisher, GroundingHandle, GroundingRunner
+from cloud_dast.runtime import oob
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.state import RuntimeState
 from cloud_dast.runtime.execution import BoundPathRunner
 from cloud_dast.runtime.metrics import CampaignMetrics
-from cloud_dast.verification.coverage import build_coverage_matrix
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
+from cloud_dast.verification.coverage import build_matrix
 from cloud_dast.verification.norm_coverage import build_norm_coverage
 
 logger = logging.getLogger("cloud_dast.runtime.campaign.finalization")
@@ -35,6 +36,7 @@ class FinalizerDeps:
     binder: ScenarioBinder
     runner: BoundPathRunner
     evaluator: FindingEvaluator
+    oob_collector: oob.Coordinator | None = None
     grounding_runner: GroundingRunner | None = None
     event_bus: EventPublisher | None = None
     metrics: CampaignMetrics | None = None
@@ -47,6 +49,7 @@ class Finalizer:
         self._binder = callbacks.binder
         self._runner = callbacks.runner
         self._evaluator = callbacks.evaluator
+        self._oob = callbacks.oob_collector
         self._grounding_runner = callbacks.grounding_runner
         self._event_bus = callbacks.event_bus
         self._metrics = callbacks.metrics
@@ -77,7 +80,9 @@ class Finalizer:
                 request.service,
             )
 
-        late_oob_verdicts = self._runner.reevaluate_oob_pending()
+        late_oob_verdicts = (
+            self._oob.reevaluate_pending() if self._oob is not None else {}
+        )
         if late_oob_verdicts:
             campaign.execution.accumulator.policy_verdicts.update(
                 {
@@ -151,7 +156,7 @@ class Finalizer:
             replayed_findings=evaluation.replayed_findings,
             qdl_graph=final_binding.graph,
             qdl_plan=final_binding.plan,
-            coverage=build_coverage_matrix(
+            coverage=build_matrix(
                 final_binding.graph,
                 service=request.service,
                 invariants=final_binding.invariants,

@@ -26,7 +26,8 @@ from cloud_dast.qdl.graph import (
     field,
     has,
 )
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
+from cloud_dast.runtime.execution.runner import EventProjection
 
 
 class _EventLog:
@@ -130,6 +131,7 @@ def _grounded_failure_execution(invariant: InvariantProjection) -> ExecutionResu
                 status=VerdictStatus.FAIL,
                 confidence=1.0,
                 rationale="IAM-grounded expected outcome is DENIED",
+                evidence_refs=(observation.observation_id,),
                 model_id="grounded-outcome",
                 deterministic=True,
                 grounded=True,
@@ -140,7 +142,7 @@ def _grounded_failure_execution(invariant: InvariantProjection) -> ExecutionResu
 
 def test_lead_is_visible_unscoreable_and_never_a_finding() -> None:
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
 
     result = evaluator.evaluate(_execution(), {}, graph=_lead_graph())
 
@@ -157,7 +159,7 @@ def test_lead_is_visible_unscoreable_and_never_a_finding() -> None:
 
 def test_grounded_failure_still_raises_a_finding_next_to_a_lead() -> None:
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
     invariant = _invariant()
     execution = _grounded_failure_execution(invariant)
     events.append(
@@ -182,7 +184,7 @@ def test_grounded_failure_still_raises_a_finding_next_to_a_lead() -> None:
 
 def test_graph_without_leads_reports_no_leads() -> None:
     events = _EventLog()
-    evaluator = FindingEvaluator(events, events)
+    evaluator = FindingEvaluator(EventProjection(events, events))
 
     result = evaluator.evaluate(_execution(), {})
 

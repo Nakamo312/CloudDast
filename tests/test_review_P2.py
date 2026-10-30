@@ -36,6 +36,7 @@ from cloud_dast.qdl.graph import (
     output_field,
     transition,
 )
+from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.execution.view import build
 from cloud_dast.runtime.planning import QdlPlanner
@@ -256,7 +257,7 @@ def execute(
     service = Checker(
         target, generator or TemplateGenerator(), AllowAllGuardrail(), events
     )
-    runner = assemble_runner(service, events, events)
+    runner = assemble_runner(service, EventProjection(events, events))
     result = runner.execute_plan(
         LiveRequest(
             service="orders",
@@ -503,8 +504,7 @@ def test_historical_transition_cannot_discharge_another_resources_step(
         bus, journal = _events(tmp_path / f"events-{index}.jsonl")
         runner = assemble_runner(
             Checker(target, TemplateGenerator(), AllowAllGuardrail(), bus),
-            bus,
-            journal,
+            EventProjection(bus, journal),
             formal_repository=repository,
         )
         result = runner.execute_plan(request, plan, view)

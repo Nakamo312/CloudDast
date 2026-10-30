@@ -19,12 +19,13 @@ from cloud_dast.qdl.graph import (
     external_call,
     reached,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
     LatencyBaseline,
     LatencyOracle,
     MarkerOracle,
-    OobOracle,
 )
+from cloud_dast.verification.oracles import oob as verification_oob
 
 
 class _ReadyEventStore:
@@ -97,19 +98,18 @@ def test_oob_oracle_requires_an_authenticated_source() -> None:
     )
     missing = EvidenceEvent(channel="oob", correlation_id=marker)
 
-    accepted = OobOracle(
+    accepted = oob.Coordinator(
         _ReadyEventStore(valid),
+        verification_oob.Oracle(allowed_sources=("10.0.0.0/24",)),
         wait_seconds=0.0,
-        allowed_sources=("10.0.0.0/24",),
     ).evaluate_policy(_invariant(effect), (observation,))
-    rejected = OobOracle(
+    rejected = oob.Coordinator(
         _ReadyEventStore(disallowed),
+        verification_oob.Oracle(allowed_sources=("10.0.0.0/24",)),
         wait_seconds=0.0,
-        allowed_sources=("10.0.0.0/24",),
     ).evaluate_policy(_invariant(effect), (observation,))
-    without_source = OobOracle(
-        _ReadyEventStore(missing),
-        wait_seconds=0.0,
+    without_source = oob.Coordinator(
+        _ReadyEventStore(missing), verification_oob.Oracle(), wait_seconds=0.0
     ).evaluate_policy(_invariant(effect), (observation,))
 
     assert accepted.status is VerdictStatus.FAIL
@@ -126,11 +126,10 @@ def test_oob_oracle_adversarial_target_does_not_score_callback() -> None:
     observation = _observation(probe_marker=marker)
     event = EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
 
-    verdict = OobOracle(
+    verdict = oob.Coordinator(
         _ReadyEventStore(event),
+        verification_oob.Oracle(allowed_sources=("10.0.0.8",), adversarial_target=True),
         wait_seconds=0.0,
-        allowed_sources=("10.0.0.8",),
-        adversarial_target=True,
     ).evaluate_policy(_invariant(effect), (observation,))
 
     assert verdict.status is VerdictStatus.UNSCOREABLE

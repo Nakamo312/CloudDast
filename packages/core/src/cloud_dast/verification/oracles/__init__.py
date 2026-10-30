@@ -1,6 +1,6 @@
 """Business services that classify verification observations."""
 
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.classification_lead import (
     ClassificationLead,
     ClassificationLeadOracle,
@@ -21,7 +21,6 @@ from cloud_dast.verification.oracles.latency import (
     collect_delivered_durations,
 )
 from cloud_dast.verification.oracles.marker import MarkerOracle
-from cloud_dast.verification.oracles.oob import OobOracle
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
@@ -46,7 +45,6 @@ __all__ = [
     "LatencyOracle",
     "collect_delivered_durations",
     "MarkerOracle",
-    "OobOracle",
     "NormView",
     "ObservationTrace",
     "ObservationPair",

@@ -16,89 +16,149 @@ from cloud_dast.model import (
     VerdictStatus,
 )
 from cloud_dast.ports import EvidenceEvent
-from cloud_dast.qdl.field_roles import FieldRolePolicy, resolve_field_roles
-from cloud_dast.qdl.graph import (
-    Atom,
-    Context,
-    Fact,
-    Predicate,
-    QdlGraph,
-    canonical_json,
-    input_field,
-    output_field,
-)
 from cloud_dast.runtime.candidates.feedback import (
     ExecutionFeedback,
     ExecutionFeedbackEntry,
 )
+from cloud_dast.runtime.execution.checks import run_check
 from cloud_dast.verification.differential.report import DiffReport
 from cloud_dast.verification.evidence import (
     EvidenceBudget,
+    EvidenceView,
     build_evidence_view,
     build_execution_feedback_view,
     build_paired_evidence_view,
 )
 
 
-def _field_role_fact(
-    action: str,
-    field_name: str,
-    role: str,
-    *,
-    context: Context = Context.ACCEPTED,
-    direction: str = "input",
-) -> Fact:
-    constructor = input_field if direction == "input" else output_field
-    field = constructor(Atom(value=action), Atom(value=field_name))
-    return Fact(
-        context=context,
-        predicate=Predicate.from_name("has"),
-        args=(field, Atom(value=role)),
+@pytest.mark.parametrize("cap", [1, 64, 1023])
+def test_evidence_budget_requires_space_for_metadata(cap) -> None:
+    with pytest.raises(ValueError, match="max_total_bytes must be at least 1024"):
+        EvidenceBudget(max_total_bytes=cap)
+
+
+def test_default_evidence_budget_includes_rendered_separator_overhead() -> None:
+    observation = Observation(
+        check_id="check",
+        scenario_id="scenario",
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary="ok",
+        response_tree=tuple((f"leaf.{i}", "v" * 48) for i in range(1024)),
     )
 
+    view = build_evidence_view(observation=observation)
+    rendered_bytes = len(json.dumps(view.to_dict(), ensure_ascii=False).encode("utf-8"))
 
-def _role_graph(*facts: Fact) -> QdlGraph:
-    """Declare every referenced term so the role graph stays grounded."""
+    assert rendered_bytes <= EvidenceBudget().max_total_bytes
 
-    declarations: dict[str, Fact] = {}
-    for fact in facts:
-        field = fact.args[0]
-        declaration_type = (
-            "InputField" if field.name == "input_field" else "OutputField"
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        None,
+        {},
+        {
+            "max_leaves": 1,
+            "max_string_chars": 1024,
+            "max_total_bytes": 1024,
+            "dropped_leaves": 0,
+            "truncated": "false",
+        },
+        {
+            "max_leaves": 1,
+            "max_string_chars": 10000,
+            "max_total_bytes": 64,
+            "dropped_leaves": 0,
+            "truncated": False,
+        },
+    ],
+)
+def test_explicit_invalid_evidence_budget_is_not_ignored(metadata) -> None:
+    with pytest.raises(ValueError, match="invalid evidence budget metadata"):
+        EvidenceView(
+            data={"kind": "observation", "label": "x" * 2000, "budget": metadata},
+            original_digest="original",
         )
-        declarations.setdefault(
-            canonical_json(field),
-            Fact(
-                context=Context.ACCEPTED,
-                predicate=Predicate.from_name("is"),
-                args=(field, Atom(value=declaration_type)),
+
+
+@pytest.mark.parametrize(
+    ("input_value", "output_value"),
+    [
+        ("INPUT-CANARY", "OUTPUT-CANARY"),
+        (("nested", 1, None), ("🔥", False)),
+        (False, 123),
+        (None, "output"),
+    ],
+)
+def test_run_check_retains_bounded_input_output_trace_and_oob(
+    input_value, output_value
+) -> None:
+    check = Check(
+        invariant_id="inv",
+        method_id="get",
+        scenario_id="scenario",
+        identities=("actor",),
+        request=(("value", input_value),),
+        probe_marker="marker",
+    )
+
+    def target(actual):
+        return Observation(
+            check_id=actual.check_id,
+            scenario_id=actual.scenario_id,
+            observed_outcome=AccessOutcome.ALLOWED,
+            response_summary="RESPONSE-CANARY",
+            output=ResponseData(fields=(("value", output_value),)),
+        )
+
+    observation = run_check(check, target)
+    view = build_evidence_view(
+        check=check,
+        observation=observation,
+        oob_events=(
+            EvidenceEvent(
+                channel="oob",
+                correlation_id="marker",
+                source="internal-host",
+                attributes=(("value", "OOB-CANARY"),),
             ),
-        )
-    action = Atom(value="action:get")
-    return QdlGraph(
-        facts=(
-            Fact(
-                context=Context.ACCEPTED,
-                predicate=Predicate.from_name("is"),
-                args=(action, Atom(value="Action")),
-            ),
-            *declarations.values(),
-            *facts,
-        )
+        ),
+    )
+    data = view.to_dict()
+    assert data["request"]["values"][0]["value"] == json.loads(json.dumps(input_value))
+    assert data["response"]["leaves"][0]["value"] == json.loads(
+        json.dumps(output_value)
+    )
+    assert data["trace"][0]["response"]["fields"][0]["value"] == json.loads(
+        json.dumps(output_value)
+    )
+    assert data["response_summary"] == "RESPONSE-CANARY"
+    assert data["oob"]["events"][0]["source"] == "internal-host"
+    assert data["oob"]["events"][0]["attributes"]["value"] == "OOB-CANARY"
+    assert data == view.data
+
+
+@pytest.mark.parametrize("cap", [1024, 2048, 4096, 8192, 128 * 1024])
+@pytest.mark.parametrize("character", ["🔥", "я", '"', "\\"])
+def test_evidence_byte_cap_includes_unicode_and_json_escaping(cap, character) -> None:
+    text = character * 1024
+    observation = Observation(
+        observation_id=text,
+        check_id=text,
+        scenario_id=text,
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary=text,
     )
 
-
-def _is_redacted(value: object) -> bool:
-    return (
-        isinstance(value, dict)
-        and value.get("evidence_encoding") == "redacted"
-        and isinstance(value.get("sha256"), str)
-        and len(value["sha256"]) == 64
-        and isinstance(value.get("length"), int)
+    view = build_evidence_view(
+        observation=observation, budget=EvidenceBudget(max_total_bytes=cap)
     )
 
+    for data in (view.data, view.to_dict()):
+        assert len(json.dumps(data, ensure_ascii=False).encode("utf-8")) <= cap
 
-def test_evidence_view_carries_redacted_runtime_evidence() -> None:
+
+def test_evidence_view_carries_full_bounded_runtime_evidence() -> None:
     check = Check(
         invariant_id="invariant-1",
         method_id="get",
@@ -157,35 +217,38 @@ def test_evidence_view_carries_redacted_runtime_evidence() -> None:
     data = view.to_dict()
 
     request_value = data["request"]["values"][0]["value"]
-    assert _is_redacted(request_value)
+    assert request_value == "attacker-canary"
     assert data["response"]["source"] == "response_tree"
     assert [leaf["path"] for leaf in data["response"]["leaves"]] == [
         "safe",
         "nested.token",
     ]
-    assert all(_is_redacted(leaf["value"]) for leaf in data["response"]["leaves"])
+    assert {leaf["path"]: leaf["value"] for leaf in data["response"]["leaves"]} == {
+        "safe": "sanitized",
+        "nested.token": "tok-full-fidelity",
+    }
     assert data["response"]["safe_fields"][0]["path"] == "safe"
-    assert _is_redacted(data["response"]["safe_fields"][0]["value"])
-    assert _is_redacted(data["error_reason"])
+    assert data["response"]["safe_fields"][0]["value"] == "sanitized"
+    assert data["error_reason"] == "permission denied for attacker"
     assert view.data["error_reason"] == "permission denied for attacker"
     assert data["status"] == "http:403"
     assert data["outcome"] == "denied"
     assert data["duration_ms"] == 12.5
-    assert _is_redacted(data["trace"][0]["resource_before"][0]["value"])
-    assert _is_redacted(data["trace"][0]["resource_after"][0]["value"])
-    assert _is_redacted(data["trace"][0]["response"]["fields"][0]["value"])
+    assert data["trace"][0]["resource_before"][0]["value"] == 10
+    assert data["trace"][0]["resource_after"][0]["value"] == 20
+    assert data["trace"][0]["response"]["fields"][0]["value"] == "sanitized"
     assert data["oob"]["events"][0]["correlation_id"] == "marker-1"
-    assert _is_redacted(data["oob"]["events"][0]["attributes"]["method"])
+    assert data["oob"]["events"][0]["attributes"]["method"] == "GET"
     assert view.data["oob"]["events"][0]["attributes"]["method"] == "GET"
     assert data["oob"]["events"][0]["observed_at"] == 0.0
-    assert _is_redacted(data["oob"]["events"][0]["attributes"]["path"])
-    assert _is_redacted(data["oob"]["events"][0]["source"])
+    assert data["oob"]["events"][0]["attributes"]["path"] == "/cb"
+    assert data["oob"]["events"][0]["source"] == "10.0.0.8"
     assert view.truncated is False
     rendered = json.dumps(data, ensure_ascii=False)
-    assert "attacker-canary" not in rendered
-    assert "tok-full-fidelity" not in rendered
-    assert "/cb" not in rendered
-    assert "10.0.0.8" not in rendered
+    assert "attacker-canary" in rendered
+    assert "tok-full-fidelity" in rendered
+    assert "/cb" in rendered
+    assert "10.0.0.8" in rendered
 
 
 def test_paired_evidence_view_carries_values_and_path_diffs() -> None:
@@ -236,11 +299,11 @@ def test_paired_evidence_view_carries_values_and_path_diffs() -> None:
         report=report,
     ).to_dict()
 
-    assert _is_redacted(data["control"]["request"]["values"][0]["value"])
-    assert _is_redacted(data["treatment"]["request"]["values"][0]["value"])
-    assert _is_redacted(data["diff"]["fields_only_treatment"][0]["treatment_value"])
-    assert _is_redacted(data["diff"]["value_differs"][0]["control_value"])
-    assert _is_redacted(data["diff"]["value_differs"][0]["treatment_value"])
+    assert data["control"]["request"]["values"][0]["value"] == "benign"
+    assert data["treatment"]["request"]["values"][0]["value"] == "canary"
+    assert data["diff"]["fields_only_treatment"][0]["treatment_value"] == "tok_123"
+    assert data["diff"]["value_differs"][0]["control_value"] == "alice@example.com"
+    assert data["diff"]["value_differs"][0]["treatment_value"] == "bob@example.com"
     assert data["diff"]["fields_only_treatment"][0]["path"] == "payment_token"
     assert data["diff"]["value_differs"][0]["path"] == "email"
 
@@ -295,107 +358,11 @@ def test_execution_feedback_view_carries_outcome_response_and_trace() -> None:
     assert attempt["grounded"] is False
     assert attempt["proximity"] == pytest.approx(1 / 3)
     assert attempt["evidence"]["request"]["values"][0]["name"] == "resource_id"
-    assert _is_redacted(attempt["evidence"]["request"]["values"][0]["value"])
+    assert attempt["evidence"]["request"]["values"][0]["value"] == "candidate"
     assert attempt["evidence"]["response"]["leaves"][0]["path"] == "error.message"
-    assert _is_redacted(attempt["evidence"]["response"]["leaves"][0]["value"])
-    assert _is_redacted(attempt["evidence"]["trace"][0]["resource_before"][0]["value"])
-    assert _is_redacted(attempt["evidence"]["trace"][0]["resource_after"][0]["value"])
-
-
-def test_evidence_view_retains_fields_with_accepted_object_ref_roles() -> None:
-    policy = resolve_field_roles(
-        _role_graph(
-            _field_role_fact("action:get", "order_id", "object_ref"),
-            _field_role_fact("action:get", "session_id", "credential"),
-        )
-    )
-    check = Check(
-        invariant_id="invariant-1",
-        method_id="get",
-        scenario_id="scenario-1",
-        request=(
-            ("order_id", "order-victim"),
-            ("session_id", "session-secret"),
-        ),
-        identities=("attacker",),
-    )
-    observation = Observation(
-        check_id=check.check_id,
-        scenario_id=check.scenario_id,
-        observed_outcome=AccessOutcome.ALLOWED,
-        response_summary="ok",
-    )
-
-    data = build_evidence_view(
-        check=check,
-        observation=observation,
-        field_roles=policy,
-    ).to_dict()
-
-    values = {entry["name"]: entry["value"] for entry in data["request"]["values"]}
-    assert values["order_id"] == "order-victim"
-    assert _is_redacted(values["session_id"])
-
-
-def test_evidence_view_retains_response_leaves_by_output_role() -> None:
-    policy = resolve_field_roles(
-        _role_graph(
-            _field_role_fact(
-                "action:get",
-                "order.id",
-                "object_ref",
-                direction="output",
-            ),
-        )
-    )
-    check = Check(
-        invariant_id="invariant-1",
-        method_id="get",
-        scenario_id="scenario-1",
-        request=(("order_id", "order-victim"),),
-        identities=("attacker",),
-    )
-    observation = Observation(
-        check_id=check.check_id,
-        scenario_id=check.scenario_id,
-        observed_outcome=AccessOutcome.ALLOWED,
-        response_summary="ok",
-        response_tree=(
-            ("order.id", "order-victim"),
-            ("session.id", "session-secret"),
-        ),
-    )
-
-    data = build_evidence_view(
-        check=check,
-        observation=observation,
-        field_roles=policy,
-    ).to_dict()
-
-    leaves = {leaf["path"]: leaf["value"] for leaf in data["response"]["leaves"]}
-    assert leaves["order.id"] == "order-victim"
-    assert _is_redacted(leaves["session.id"])
-
-
-def test_evidence_view_reports_missing_roles_as_deficits(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    check = Check(
-        invariant_id="invariant-1",
-        method_id="get",
-        scenario_id="scenario-1",
-        request=(("session_id", "session-secret"),),
-        identities=("attacker",),
-    )
-
-    with caplog.at_level("WARNING", logger="cloud_dast.formal.evidence_view"):
-        data = build_evidence_view(
-            check=check,
-            field_roles=FieldRolePolicy(),
-        ).to_dict()
-
-    assert _is_redacted(data["request"]["values"][0]["value"])
-    assert "input:get:session_id" in caplog.text
+    assert attempt["evidence"]["response"]["leaves"][0]["value"] == "resource not found"
+    assert attempt["evidence"]["trace"][0]["resource_before"][0]["value"] == "before"
+    assert attempt["evidence"]["trace"][0]["resource_after"][0]["value"] == "after"
 
 
 def test_execution_feedback_budget_keeps_the_latest_attempt() -> None:
@@ -431,9 +398,7 @@ def test_execution_feedback_budget_keeps_the_latest_attempt() -> None:
     assert (
         data["attempts"][1]["evidence"]["response"]["leaves"][0]["path"] == "result.1"
     )
-    assert _is_redacted(
-        data["attempts"][1]["evidence"]["response"]["leaves"][0]["value"]
-    )
+    assert data["attempts"][1]["evidence"]["response"]["leaves"][0]["value"] == 1
 
 
 def test_evidence_budgets_hash_and_truncate_oversized_values() -> None:
@@ -467,7 +432,7 @@ def test_evidence_budgets_hash_and_truncate_oversized_values() -> None:
     assert binary["evidence_encoding"] == "binary"
     assert binary["sha256"] and "\\x00" in binary["preview"]
     model_leaves = data["response"]["leaves"]
-    assert all(_is_redacted(leaf["value"]) for leaf in model_leaves)
+    assert model_leaves == leaves
 
 
 def test_evidence_total_budget_is_enforced() -> None:
@@ -492,7 +457,7 @@ def test_evidence_total_budget_is_enforced() -> None:
     assert view.digest != view.original_digest
 
 
-def test_evidence_digest_covers_the_redacted_model_view() -> None:
+def test_evidence_digest_covers_the_bounded_model_view() -> None:
     observation = Observation(
         check_id="check",
         scenario_id="scenario",
@@ -511,3 +476,71 @@ def test_evidence_digest_covers_the_redacted_model_view() -> None:
     )
 
     assert view.digest == hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def test_evidence_json_copy_is_detached_and_digest_is_stable() -> None:
+    payload = {
+        "response": {"leaves": [{"path": "value", "value": {"nested": ["original"]}}]}
+    }
+    view = EvidenceView(data=payload, original_digest="original-identity")
+    digest = view.digest
+    payload["response"]["leaves"][0]["value"]["nested"].append("caller-mutated")
+    rendered = view.to_dict()
+    rendered["response"]["leaves"][0]["value"]["nested"].append("copy-mutated")
+    assert view.to_dict()["response"]["leaves"][0]["value"]["nested"] == ["original"]
+    assert view.model_dump() == view.data
+    assert view.digest == digest
+    assert view.original_digest == "original-identity"
+    assert (
+        digest
+        == hashlib.sha256(
+            json.dumps(
+                view.to_dict(),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+        ).hexdigest()
+    )
+
+
+@pytest.mark.parametrize("cap", [1024, 2048, 4096])
+def test_manual_budget_normalization_is_idempotent(cap) -> None:
+    data = {
+        "kind": "observation",
+        "label": "🔥" * 5000,
+        "budget": {
+            "max_leaves": "1024",
+            "max_string_chars": "1024",
+            "max_total_bytes": str(cap),
+            "dropped_leaves": 0,
+            "truncated": False,
+        },
+    }
+    view = EvidenceView(data=data, original_digest="original")
+    rendered = view.to_dict()
+    assert len(json.dumps(rendered, ensure_ascii=False).encode()) <= cap
+    assert rendered["budget"]["max_total_bytes"] == cap
+    assert view.truncated is True
+    for _ in range(3):
+        repeated = EvidenceView(data=rendered, original_digest=view.original_digest)
+        assert repeated.to_dict() == rendered
+        assert repeated.digest == view.digest
+        assert repeated.truncated is True
+    assert data["label"] == "🔥" * 5000
+
+
+def test_original_digest_is_independent_of_projection_budget() -> None:
+    observation = Observation(
+        check_id="check",
+        scenario_id="scenario",
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary="x" * 5000,
+    )
+    small = build_evidence_view(
+        observation=observation, budget=EvidenceBudget(max_total_bytes=1024)
+    )
+    default = build_evidence_view(observation=observation)
+    assert small.original_digest == default.original_digest
+    assert small.digest != default.digest

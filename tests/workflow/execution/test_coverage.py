@@ -37,15 +37,16 @@ from cloud_dast.qdl.graph import (
 from cloud_dast.qdl.graph import (
     field as resource_field,
 )
+from cloud_dast.qdl.reasoning import QdlAttackPath, QdlPlan
 from cloud_dast.qdl.state_machine import state_machine_graph
 from cloud_dast.runtime.planning import QdlPlanner
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
 from cloud_dast.verification.coverage import (
-    CoverageMatrixBuilder,
+    Builder,
     _forbidden_state_cells,
-    build_coverage_matrix,
+    build_matrix,
     evaluate_term_coverage,
 )
 from cloud_dast.verification.coverage_models import evidence_target_fact
@@ -110,7 +111,7 @@ def test_field_roles_and_primitives_are_derived_views() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     assert matrix.service == "service:orders"
     assert len(matrix.fields) == 1
@@ -141,7 +142,7 @@ def test_refers_to_derives_object_ref_role_without_capability() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.semantic_role == "object_ref"
@@ -167,7 +168,7 @@ def test_exposure_derives_response_field_capability() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.field_kind == "output"
@@ -197,7 +198,7 @@ def test_one_field_term_keeps_output_and_resource_aspects_separate() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     output_cell = next(
         cell
@@ -230,7 +231,7 @@ def test_field_without_semantic_fact_is_semantic_blind() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     assert len(matrix.blind_spots) == 1
     cell = matrix.blind_spots[0]
@@ -261,7 +262,7 @@ def test_changed_effect_derives_resource_field_and_effect_cells() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     field_cell = next(cell for cell in matrix.fields if cell.field_kind == "resource")
     assert field_cell.semantic_role == "state_transition"
@@ -297,7 +298,7 @@ def test_refers_to_fixture_closes_setup_deficit() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     field_cell = next(cell for cell in matrix.fields if cell.field_kind == "resource")
     assert field_cell.deficit == "evidence_blind"
@@ -327,7 +328,7 @@ def test_create_provider_fixture_closes_setup_deficit() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     effect_cell = next(cell for cell in matrix.effects if cell.effect_kind == "changed")
     assert effect_cell.deficit == "evidence_blind"
@@ -402,7 +403,7 @@ def test_runtime_observation_covers_field_and_effect() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=events,
@@ -481,7 +482,7 @@ def test_runtime_evidence_creates_effect_cell_without_causes_fact() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=events,
@@ -519,7 +520,7 @@ def test_evidence_target_requires_runtime_observation_fact() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.status == "unresolved"
@@ -558,7 +559,7 @@ def test_evidence_target_fact_binds_runtime_observation() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.status == "covered"
@@ -599,7 +600,7 @@ def test_request_field_execution_is_coverage_evidence() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         events=(
             CheckCompleted(
@@ -629,7 +630,7 @@ def test_declared_field_without_part_still_gets_request_deficit() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     assert len(matrix.fields) == 1
     cell = matrix.fields[0]
@@ -673,7 +674,7 @@ def test_request_deficit_is_independent_of_oracle_status() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         events=(
             CheckCompleted(
@@ -748,7 +749,7 @@ def test_oracle_witness_and_request_execution_are_distinct() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         events=(
             CheckCompleted(
@@ -809,7 +810,7 @@ def test_field_without_oracle_witness_is_unresolved_not_blind() -> None:
         ),
     )
 
-    matrix = build_coverage_matrix(
+    matrix = build_matrix(
         graph,
         events=(
             CheckCompleted(
@@ -834,7 +835,7 @@ def test_state_machine_projection_reports_states_not_actions() -> None:
         observed_transitions=(("ship", "created", "shipped"),),
     )
 
-    matrix = build_coverage_matrix(state_machine)
+    matrix = build_matrix(state_machine)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -862,7 +863,7 @@ def test_unreachable_state_is_setup_blind() -> None:
         transitions=(("publish", "draft", "published"),),
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -883,7 +884,7 @@ def test_forbidden_state_deficits_are_typed() -> None:
         observed_transitions=(("publish", "draft", "published"),),
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -896,7 +897,7 @@ def test_forbidden_state_deficits_are_typed() -> None:
     assert forbidden.status == "unresolved"
     assert forbidden.deficit == "evidence_blind"
 
-    forbidden_without_initial = build_coverage_matrix(
+    forbidden_without_initial = build_matrix(
         state_machine_graph(
             states=("draft", "published"),
             actions=("publish",),
@@ -947,7 +948,7 @@ def test_build_plan_attaches_planned_paths_to_qdl_coverage() -> None:
     graph = _planned_graph()
     plan = QdlPlanner().plan(graph)
 
-    matrix = CoverageMatrixBuilder().build_plan(plan, graph)
+    matrix = Builder().build_plan(plan, graph)
 
     assert matrix.source == "qdl"
     assert matrix.plan_hash == plan.graph_hash == graph.content_hash
@@ -967,14 +968,14 @@ def test_build_plan_rejects_graph_hash_mismatch() -> None:
     plan = QdlPlanner().plan(graph)
 
     with pytest.raises(ValueError, match="plan does not match the graph"):
-        CoverageMatrixBuilder().build_plan(plan, QdlGraph(facts=()))
+        Builder().build_plan(plan, QdlGraph(facts=()))
 
 
 def test_build_rejects_bare_qdl_plan_without_graph() -> None:
     plan = QdlPlanner().plan(_planned_graph())
 
     with pytest.raises(TypeError, match="coverage source must be a QdlGraph"):
-        build_coverage_matrix(plan)
+        build_matrix(plan)
 
 
 # --- S24R: term coverage algebra -------------------------------------------
@@ -1079,7 +1080,7 @@ def test_counter_evidence_units_carry_no_deficit() -> None:
 
 def test_coverage_matrix_projects_generic_terms() -> None:
     graph = _planned_graph()
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     terms = matrix.terms
     kinds = {cell.term_kind for cell in terms}
@@ -1141,7 +1142,7 @@ def test_field_cells_carry_their_factor_state() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.factors is not None
@@ -1186,7 +1187,7 @@ def test_runtime_evidence_does_not_mask_semantic_deficit() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.fields[0]
     assert cell.observation_ids == ("observation:obs-1",)
@@ -1224,7 +1225,7 @@ def test_observed_effect_without_oracle_primitive_is_oracle_blind() -> None:
         )
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     cell = matrix.effects[0]
     assert cell.effect_kind == "create"
@@ -1282,7 +1283,7 @@ def test_proven_unreachable_forbidden_state_is_covered() -> None:
         forbidden_states=(("no_archived", "archived"),),
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -1300,7 +1301,7 @@ def test_observed_unspecified_transition_is_counter_evidence() -> None:
         observed_transitions=(("ship", "created", "shipped"),),
     )
 
-    matrix = build_coverage_matrix(graph)
+    matrix = build_matrix(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -1316,3 +1317,153 @@ def test_observed_unspecified_transition_is_counter_evidence() -> None:
     term = next(cell for cell in matrix.terms if cell.term_kind == "transition")
     assert term.deficit is None
     assert term.missing_factor is None
+
+
+@pytest.mark.parametrize("declared", [False, True])
+@pytest.mark.parametrize(
+    "witness",
+    [
+        "pass",
+        "fail",
+        "unscoreable",
+        "missing",
+        "foreign_observation",
+        "foreign_path",
+        "foreign_step",
+    ],
+)
+def test_effect_coverage_preserves_runtime_witness_provenance(declared, witness):
+    static_action = Atom(value="action:static")
+    runtime_action = Atom(value="action:runtime")
+    resource = Atom(value="resource:order")
+    norm = Atom(value="norm:immutable")
+    effect = changed(resource, Atom(value="status"))
+    fact = qfact("prevents", norm, effect, context=Context.ACCEPTED)
+    graph = QdlGraph(
+        facts=(
+            qfact("is", static_action, Atom(value="Action")),
+            qfact("is", runtime_action, Atom(value="Action")),
+            qfact("is", resource, Atom(value="ResourceType")),
+            qfact("is", norm, Atom(value="Norm"), context=Context.ACCEPTED),
+            fact,
+            *((qfact("causes", static_action, effect),) if declared else ()),
+        )
+    )
+    invariant = InvariantProjection(
+        invariant_id="invariant:immutable",
+        norm_id=norm.value,
+        statement="status is immutable",
+        severity=Severity.HIGH,
+        norm_fact=fact,
+    )
+    observation = Observation(
+        check_id="check:runtime",
+        scenario_id="scenario:runtime",
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary="allowed",
+    )
+    step = QdlStepEvaluated(
+        path_id="path:runtime",
+        step_id="step:runtime",
+        step_index=0,
+        verdict=VerdictStatus.PASS if witness == "pass" else VerdictStatus.FAIL,
+        phase="goal_reached",
+        reason="deterministic grounded witness",
+        action_id="runtime",
+        check_id=observation.check_id,
+        observation_id=observation.observation_id,
+        norm_fact=fact,
+    )
+    updates = {
+        "unscoreable": {"verdict": VerdictStatus.UNSCOREABLE},
+        "foreign_observation": {"observation_id": "observation:foreign"},
+        "foreign_path": {"path_id": "path:foreign"},
+        "foreign_step": {"step_id": "step:foreign"},
+    }
+    step = step.model_copy(update=updates.get(witness, {}))
+    events = (
+        CheckCompleted(observation=observation, correlation_id=observation.check_id),
+        CoverageUpdated(
+            check_id=observation.check_id,
+            method_id="runtime",
+            invariant_id=invariant.invariant_id,
+            scenario_id=observation.scenario_id,
+            observation_id=observation.observation_id,
+            path_id="path:runtime",
+            step_id="step:runtime",
+            correlation_id=observation.check_id,
+        ),
+        *((step,) if witness != "missing" else ()),
+    )
+    plan = QdlPlan(
+        graph_hash=graph.content_hash,
+        attack_paths=tuple(
+            QdlAttackPath(
+                path_id=f"path:{action}",
+                context=Context.CONTRACT,
+                actions=(f"action:{action}",),
+            )
+            for action in ("static", "runtime")
+        ),
+    )
+    matrix = Builder().build_plan(
+        plan,
+        graph,
+        invariants={invariant.invariant_id: invariant},
+        events=events,
+    )
+    witnessed = witness in {"pass", "fail"}
+    assert matrix.effect_summary.total == int(declared or witnessed)
+    if not matrix.effects:
+        return
+    (cell,) = matrix.effects
+    assert cell.effect_id == canonical_json(effect)
+    assert cell.observation_ids == ((observation.observation_id,) if witnessed else ())
+    assert cell.norm_ids == (norm.value,)
+    assert cell.action_ids == tuple(
+        sorted(
+            ({"action:static"} if declared else set())
+            | ({"action:runtime", "runtime"} if witnessed else set())
+        )
+    )
+    assert cell.plan_path_ids == (("path:static",) if declared else ("path:runtime",))
+    assert cell.status == ("covered" if witnessed else "blind")
+    assert cell.deficit == (None if witnessed else "setup_blind")
+    assert cell.factors.setup is witnessed
+    assert cell.factors.runtime is witnessed
+    assert cell.rationale == (
+        (
+            "effect has runtime evidence"
+            if declared
+            else "runtime evidence proves the effect without a causes fact"
+        )
+        if witnessed
+        else "fixture for this coverage target is not derivable"
+    )
+
+
+@pytest.mark.parametrize("declared", [False, True])
+def test_graph_evidence_does_not_expand_the_effect_universe(declared):
+    action = Atom(value="action:update")
+    resource = Atom(value="resource:order")
+    observation = Atom(value="observation:graph")
+    effect = changed(resource, Atom(value="status"))
+    graph = QdlGraph(
+        facts=(
+            qfact("is", action, Atom(value="Action")),
+            qfact("is", resource, Atom(value="ResourceType")),
+            qfact(
+                "is", observation, Atom(value="Observation"), context=Context.RUNTIME
+            ),
+            qfact("evidence", observation, effect, context=Context.RUNTIME),
+            *((qfact("causes", action, effect),) if declared else ()),
+        )
+    )
+    matrix = build_matrix(graph)
+    assert matrix.effect_summary.total == int(declared)
+    if declared:
+        (cell,) = matrix.effects
+        assert cell.status == "covered"
+        assert cell.observation_ids == (observation.value,)
+        assert cell.factors.setup is True
+        assert cell.rationale == "effect has runtime evidence"

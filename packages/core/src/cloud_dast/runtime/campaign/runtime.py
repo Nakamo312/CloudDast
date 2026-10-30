@@ -20,6 +20,7 @@ from cloud_dast.ports import (
     ScenarioRepository,
 )
 from cloud_dast.runtime.binding import ScenarioBinder
+from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.finalization import (
     Finalizer,
 )
@@ -44,7 +45,6 @@ from cloud_dast.runtime.execution.runner import (
 )
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.replanning import Coordinator
-from cloud_dast.verification.finding_evaluator import FindingEvaluator
 from cloud_dast.verification.oracles.latency import (
     LatencyOracle,
 )

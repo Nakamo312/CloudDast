@@ -2,22 +2,25 @@ from __future__ import annotations
 
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
-    JsonValue,
-    Observation,
     OracleDeficit,
     PolicyVerdict,
     VerdictStatus,
 )
 from cloud_dast.model.events import canonical_action_id, normalize_action
 from cloud_dast.qdl.graph import Atom, reached
-from cloud_dast.verification.norm_view import NormView
+from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.action_alignment import (
-    action_alignment_rationale,
     actions_align,
+    explain_mismatch,
 )
 from cloud_dast.verification.oracles.roles import WitnessRolePolicy
 from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.projection import ObservationProjector
+from cloud_dast.verification.witness import (
+    response_is_incomplete,
+    response_values,
+    value_contains,
+)
 
 
 class MarkerOracle:
@@ -47,7 +50,7 @@ class MarkerOracle:
         norm = NormView.from_invariant(invariant)
         if norm is None or norm.primitive != "marker":
             return self._unscoreable("invariant is not a marker QDL norm")
-        mismatch = action_alignment_rationale(norm.action_id, method_id)
+        mismatch = explain_mismatch(norm.action_id, method_id)
         if mismatch is not None:
             return self._unscoreable(mismatch)
         if not trace:
@@ -125,8 +128,8 @@ class MarkerOracle:
         )
         reflected = (
             any(
-                _value_contains(value, marker) or _path_contains(path, marker)
-                for path, value in _response_values(observation)
+                value_contains(value, marker) or _path_contains(path, marker)
+                for path, value in response_values(observation)
             )
             or marker in observation.response_summary
             or marker in (observation.error_reason or "")
@@ -176,55 +179,5 @@ class MarkerOracle:
         )
 
 
-def _response_values(observation: Observation) -> tuple[tuple[str, JsonValue], ...]:
-    values = observation.response_tree
-    if observation.output is not None:
-        values += observation.output.fields
-    return values
-
-
-def _value_contains(value: JsonValue, marker: str) -> bool:
-    if isinstance(value, str):
-        return marker in value
-    if isinstance(value, tuple):
-        return any(_value_contains(item, marker) for item in value)
-    return False
-
-
 def _path_contains(path: str, marker: str) -> bool:
     return marker.casefold() in path.casefold()
-
-
-def is_echo_path(
-    path: str,
-    probe_fields: frozenset[str],
-    grounded_sink_fields: frozenset[str],
-) -> bool:
-    segments = tuple(
-        segment.strip() for segment in path.casefold().split(".") if segment
-    )
-    if segments and segments[0] in {"request", "echo"}:
-        return True
-    if any(segment in grounded_sink_fields for segment in segments):
-        return False
-    return any(segment in probe_fields for segment in segments)
-
-
-_INCOMPLETE_RESPONSE_PATHS = frozenset({"__truncated__", "not_available"})
-
-
-def response_is_incomplete(observation: Observation) -> bool:
-    paths = {path for path, _ in observation.response_tree if _is_incomplete_path(path)}
-    output = observation.output
-    if output is not None:
-        paths.update(name for name, _ in output.fields if _is_incomplete_path(name))
-        paths.update(
-            name
-            for name in getattr(output, "field_names", ())
-            if _is_incomplete_path(name)
-        )
-    return bool(paths)
-
-
-def _is_incomplete_path(path: str) -> bool:
-    return path in _INCOMPLETE_RESPONSE_PATHS or path.endswith(".not_available")

@@ -227,8 +227,8 @@ def test_alternatives_prompt_carries_only_evidence_view() -> None:
         }
     ]
     assert "live_observation" not in context
-    assert context["evidence"]["response_summary"]["evidence_encoding"] == "redacted"
-    assert "payment method rejected" not in json.dumps(context)
+    assert context["evidence"]["response_summary"] == "payment method rejected"
+    assert "payment method rejected" in json.dumps(context)
 
 
 def test_alternatives_prompt_declares_closed_role_alphabet() -> None:

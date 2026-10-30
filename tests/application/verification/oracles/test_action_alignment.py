@@ -29,13 +29,14 @@ from cloud_dast.qdl.graph import (
     has,
     reached,
 )
+from cloud_dast.runtime import oob
 from cloud_dast.verification.oracles import (
     FieldExposureOracle,
     LatencyBaseline,
     LatencyOracle,
-    OobOracle,
     PrimitiveOracleRouter,
 )
+from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.action_alignment import (
     ACTION_MISMATCH_RATIONALE,
     actions_align,
@@ -231,7 +232,9 @@ def _action_bound_case(
         event = EvidenceEvent(
             channel="oob", correlation_id="dast-oob-marker", source="10.0.0.8"
         )
-        oracle = OobOracle(_ReadyEventStore(event), wait_seconds=0.0)
+        oracle = oob.Coordinator(
+            _ReadyEventStore(event), verification_oob.Oracle(), wait_seconds=0.0
+        )
         return (
             external_call(action, Atom(value="dast-oob-marker")),
             _observation(probe_marker="dast-oob-marker"),
