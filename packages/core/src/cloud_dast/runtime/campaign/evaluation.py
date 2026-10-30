@@ -10,10 +10,7 @@ from cloud_dast.model.events import CheckCompleted, DomainEvent, FindingRaised
 from cloud_dast.qdl.graph import QdlGraph
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.findings import collect
-from cloud_dast.verification.oracles.classification_lead import (
-    ClassificationLead,
-    evaluate_classification_leads,
-)
+from cloud_dast.verification.oracles import leads
 from cloud_dast.verification.taxonomy import ClassificationFacts
 
 
@@ -22,7 +19,7 @@ class FindingEvaluator:
 
     def __init__(self, projection: EventProjection) -> None:
         self._projection = projection
-        self._leads: tuple[ClassificationLead, ...] = ()
+        self._leads: tuple[leads.Lead, ...] = ()
 
     @property
     def events(self) -> Iterable[DomainEvent]:
@@ -30,7 +27,7 @@ class FindingEvaluator:
         return self._projection.refresh()
 
     @property
-    def leads(self) -> tuple[ClassificationLead, ...]:
+    def leads(self) -> tuple[leads.Lead, ...]:
         """Classification leads evaluated by the most recent evaluation."""
         return self._leads
 
@@ -41,7 +38,7 @@ class FindingEvaluator:
         graph: QdlGraph | None = None,
     ) -> EvaluationResult:
         classification_facts = ClassificationFacts.from_graph(graph)
-        self._leads = evaluate_classification_leads(graph)
+        self._leads = leads.evaluate(graph)
         events = self._projection.refresh()
         observation_ids = {
             observation.observation_id for observation in execution.observations

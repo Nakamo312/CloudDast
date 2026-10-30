@@ -29,8 +29,8 @@ from cloud_dast.qdl.semantic_norm_compiler import filter_semantic_roles
 from cloud_dast.qdl.validation import ValidationIssue, filter_declaration_closure
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.evidence import (
-    EvidenceView,
-    evidence_response_fields,
+    View,
+    response_fields,
 )
 from cloud_dast.verification.promotion import field_is_bound
 
@@ -245,7 +245,7 @@ def _response_semantics_graph(
     graph: QdlGraph,
     action_slice: QdlGraph,
     action_ids: tuple[str, ...],
-    evidence: EvidenceView | None,
+    evidence: View | None,
 ) -> tuple[QdlGraph | None, tuple[ValidationIssue, ...]]:
     """Narrow a validated proposal to response-shape semantic facts."""
 
@@ -280,13 +280,13 @@ def _filter_response_semantics_facts(
     graph: QdlGraph,
     action_slice: QdlGraph,
     action_ids: tuple[str, ...],
-    evidence: EvidenceView | None,
+    evidence: View | None,
 ) -> tuple[QdlGraph | None, tuple[ValidationIssue, ...]]:
     """Ground response-shaped model facts in actions, owners, and evidence."""
 
     allowed_actions = _allowed_actions(action_slice, action_ids)
     target_resources = _resources_by_action(action_slice)
-    evidence_fields = evidence_response_fields(evidence)
+    evidence_fields = response_fields(evidence)
     kept_facts = tuple(
         fact
         for fact in graph.facts

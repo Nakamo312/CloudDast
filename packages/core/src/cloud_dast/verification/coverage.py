@@ -705,7 +705,7 @@ class Builder:
                     continue
             else:
                 continue
-            action_id = _atom_text(action)
+            action_id = _term_key(action)
             if action_id is not None:
                 actions_by_effect.setdefault(canonical_json(effect), set()).add(
                     action_id
@@ -723,8 +723,8 @@ class Builder:
                 continue
             if compilation.effect.name != "transition":
                 continue
-            from_state = _atom_text(compilation.effect.args[0])
-            to_state = _atom_text(compilation.effect.args[1])
+            from_state = _term_key(compilation.effect.args[0])
+            to_state = _term_key(compilation.effect.args[1])
             if from_state is None or to_state is None:
                 continue
             norm_id = _term_key(fact.args[0])
@@ -834,20 +834,11 @@ def _plan_path_actions(
     return path.actions
 
 
-def _declarations(graph: QdlGraph, context: Context) -> dict[str, str]:
-    declarations: dict[str, str] = {}
-    for fact in graph.facts_for("is", contexts={context}):
-        if len(fact.args) != 2:
-            continue
-        declarations[canonical_json(fact.args[0])] = _atom_text(fact.args[1])
-    return declarations
-
-
 def _service_id(graph: QdlGraph, context: Context) -> str:
     services = sorted(
-        _atom_text(fact.args[0])
+        _term_key(fact.args[0])
         for fact in graph.facts_for("is", contexts={context})
-        if len(fact.args) == 2 and _atom_text(fact.args[1]) == "Service"
+        if len(fact.args) == 2 and _term_key(fact.args[1]) == "Service"
     )
     return services[0] if services else ""
 
@@ -860,7 +851,7 @@ def _declared_identifiers(
     return {
         _term_key(fact.args[0])
         for fact in graph.facts_for("is", contexts={context})
-        if len(fact.args) == 2 and _atom_text(fact.args[1]) == type_name
+        if len(fact.args) == 2 and _term_key(fact.args[1]) == type_name
     }
 
 
@@ -876,7 +867,7 @@ def _field_units(
     """
 
     declarations = {
-        canonical_json(fact.args[0]): _atom_text(fact.args[1])
+        canonical_json(fact.args[0]): _term_key(fact.args[1])
         for fact in graph.facts_for("is", contexts=contexts)
         if len(fact.args) == 2
     }
@@ -939,7 +930,7 @@ def _field_units(
             continue
         unit_for(
             witness,
-            _atom_text(witness.args[1]),
+            _term_key(witness.args[1]),
             "output",
             _term_key(action),
         )
@@ -951,7 +942,7 @@ def _field_units(
         field_term = resource_field(effect.args[0], effect.args[1])
         unit_for(
             field_term,
-            _atom_text(effect.args[1]),
+            _term_key(effect.args[1]),
             "resource",
             _term_key(action),
         )
@@ -999,14 +990,8 @@ def _effect_units(
 
 def _field_name(field_term: Struct) -> str:
     if field_term.name in {"input_field", "output_field", "field"}:
-        return _atom_text(field_term.args[1])
+        return _term_key(field_term.args[1])
     return canonical_json(field_term)
-
-
-def _atom_text(term: Term) -> str:
-    if isinstance(term, Atom):
-        return str(term.value)
-    return canonical_json(term)
 
 
 def _term_key(term: Term) -> str:
@@ -1075,13 +1060,13 @@ def _observations_by_target(
         observation_id = _term_key(observation)
         if observation_id not in observed_ids:
             continue
-        primitive_name = _atom_text(primitive)
+        primitive_name = _term_key(primitive)
         if primitive_name not in _PRIMITIVES:
             raise ValueError(f"unknown primitive: {primitive_name}")
         observations[
             (
                 canonical_json(field_term),
-                _atom_text(role),
+                _term_key(role),
                 primitive_name,
             )
         ].add(observation_id)
@@ -1107,14 +1092,14 @@ def _state_machine_transitions(
     context: Context,
 ) -> set[StateTransition]:
     return {
-        (_term_key(fact.args[0]), _atom_text(fact.args[1]), _atom_text(fact.args[2]))
+        (_term_key(fact.args[0]), _term_key(fact.args[1]), _term_key(fact.args[2]))
         for fact in graph.facts_for("transition", contexts={context})
     }
 
 
 def _initial_states(graph: QdlGraph, context: Context) -> set[str]:
     return {
-        _atom_text(fact.args[0])
+        _term_key(fact.args[0])
         for fact in graph.facts_for("initial", contexts={context})
     }
 
@@ -1124,7 +1109,7 @@ def _forbidden_states(
     context: Context,
 ) -> set[ForbiddenState]:
     return {
-        (_term_key(fact.args[0]), _atom_text(fact.args[1]))
+        (_term_key(fact.args[0]), _term_key(fact.args[1]))
         for fact in graph.facts_for("forbidden", contexts={context})
     }
 

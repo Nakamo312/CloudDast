@@ -21,7 +21,7 @@ from cloud_dast.runtime.grounding.promotion import (
     ProposalPromoter,
 )
 from cloud_dast.runtime.grounding.results import AxisResult
-from cloud_dast.verification.evidence import EvidenceView, evidence_response_fields
+from cloud_dast.verification.evidence import View, response_fields
 from cloud_dast.verification.slices import SiblingActionSlice
 
 logger = logging.getLogger("cloud_dast.runtime.grounding")
@@ -56,7 +56,7 @@ class BatchFlow:
         context: Mapping[str, object] | None = None,
         observation=None,
         check: Check | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> AxisResult | None:
         """Return a validated proposal against the owner's immutable wave graph."""
 
@@ -99,7 +99,7 @@ class BatchFlow:
         result: AxisResult,
         *,
         sibling_slice: SiblingActionSlice | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
         previous: QdlGraph | None = None,
     ) -> QdlGraph | None:
         """Admit and persist one reactive or pinned-neighbourhood proposal."""
@@ -135,7 +135,7 @@ class BatchFlow:
             ProposalPromotionRequest(
                 source=source,
                 proposal=result.graph,
-                evidence_fields=frozenset(evidence_response_fields(evidence)),
+                evidence_fields=frozenset(response_fields(evidence)),
                 action_ids=scope_actions,
                 evidence_refs=frozenset(result.observation_ids),
                 runtime_evidence_exempt_predicates=frozenset({"refers_to", "targets"})
@@ -189,7 +189,7 @@ class BatchFlow:
         sibling_slice: SiblingActionSlice,
         observation=None,
         check: Check | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
         effect_hint: str = "",
         blocked_reason: str = "",
     ) -> AxisResult | None:

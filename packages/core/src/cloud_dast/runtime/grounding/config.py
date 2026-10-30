@@ -22,7 +22,7 @@ from cloud_dast.ports import (
 )
 from cloud_dast.qdl.graph import QdlGraph
 from cloud_dast.runtime.grounding.results import AxisResult
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import DEFAULT_SLICE_BUDGET, SliceBudget
 
 
@@ -34,7 +34,7 @@ class StartupGrounding(Protocol):
         graph: QdlGraph,
         *,
         cache_source: QdlGraph | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> Iterator[tuple[str, str, QdlGraph]]: ...
 
 

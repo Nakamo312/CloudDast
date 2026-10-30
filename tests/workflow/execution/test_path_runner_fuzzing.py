@@ -82,6 +82,7 @@ from cloud_dast.verification.oracles.latency import LatencyOracle
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast_fuzzing import (
     FindingShrinker,
     FuzzSession,
@@ -1406,7 +1407,9 @@ def test_execute_round_keeps_prewarmed_duration_path_without_baseline(
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(latency_oracle=latency_oracle),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        ),
     )
     path = _latency_path(
         method_spec,
@@ -1448,7 +1451,9 @@ def test_execute_round_runs_one_bootstrapped_duration_path(
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(latency_oracle=latency_oracle),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        ),
     )
     path = _latency_path(
         method_spec,
@@ -1511,7 +1516,9 @@ def test_execute_round_executes_duration_path_after_baseline_release(
     latency_target = LatencyTarget()
     runner, _ = _runner(
         latency_target,
-        primitive_oracle=PrimitiveOracleRouter(latency_oracle=latency_oracle),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        ),
     )
     path = _latency_path(
         method_spec,

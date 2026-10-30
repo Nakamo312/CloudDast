@@ -413,13 +413,15 @@ def test_router_scores_latency_without_production_class_dispatch(
         )
     )
     router = PrimitiveOracleRouter(
-        latency_oracle=LatencyOracle(
-            {
-                method_spec.method_id: LatencyBaseline.from_paired_durations(
-                    method_spec.method_id,
-                    ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
-                )
-            }
+        witness_oracle=WitnessSignalOracle(
+            latency_oracle=LatencyOracle(
+                {
+                    method_spec.method_id: LatencyBaseline.from_paired_durations(
+                        method_spec.method_id,
+                        ((100.0, 100.0), (100.0, 101.0), (100.0, 102.0)),
+                    )
+                }
+            )
         )
     )
 
@@ -447,12 +449,16 @@ def test_router_scores_oob_without_production_class_dispatch(
         )
     )
     router = PrimitiveOracleRouter(
-        oob_oracle=oob.Coordinator(
-            _ReadyEventStore(
-                EvidenceEvent(channel="oob", correlation_id=marker, source="10.0.0.8")
-            ),
-            verification_oob.Oracle(),
-            wait_seconds=0.0,
+        witness_oracle=WitnessSignalOracle(
+            oob_oracle=oob.Coordinator(
+                _ReadyEventStore(
+                    EvidenceEvent(
+                        channel="oob", correlation_id=marker, source="10.0.0.8"
+                    )
+                ),
+                verification_oob.Oracle(),
+                wait_seconds=0.0,
+            )
         )
     )
 

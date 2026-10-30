@@ -1,5 +1,9 @@
 # Cloud DAST: формальный субстрат и application-agnostic ядро
 
+> Исторический снимок архитектуры на 10 октября. Указанные ниже пути через
+> `application` и владельцы verification изменены последующим рефакторингом;
+> текущее состояние описано в [verification rearchitecture](docs/verification-rearchitecture.md).
+
 Дата: 2026-10-10  
 Статус: QDL-миграция завершена; live pipeline работает без legacy threat-моделей  
 Текущая проверка: `472 passed`

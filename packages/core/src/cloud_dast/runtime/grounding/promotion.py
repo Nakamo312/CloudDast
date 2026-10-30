@@ -32,7 +32,7 @@ from cloud_dast.runtime.grounding.state import (
     ParkedLeadState,
     is_original_parked_fact,
 )
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.promotion import (
     park_proposal,
     promote_payload_corpus_proposal,
@@ -334,7 +334,7 @@ class ProposalPromoter:
         self,
         source_id: str,
         action_ids: tuple[str, ...],
-        evidence: EvidenceView | None,
+        evidence: View | None,
         evidence_refs: frozenset[str] = frozenset(),
     ) -> None:
         """Persist deterministic secret-shape observations as reviewable leads."""

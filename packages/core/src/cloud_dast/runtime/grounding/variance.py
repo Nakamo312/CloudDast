@@ -20,7 +20,7 @@ from cloud_dast.runtime.grounding.promotion import (
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.runtime.grounding.source import Loader
 from cloud_dast.verification.differential.report import DiffReport, diff_campaign_key
-from cloud_dast.verification.evidence import EvidenceView, evidence_response_fields
+from cloud_dast.verification.evidence import View, response_fields
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.variance")
 
@@ -125,7 +125,7 @@ class DifferentialFlow:
         report: DiffReport,
         result: AxisResult,
         *,
-        evidence: EvidenceView,
+        evidence: View,
     ) -> QdlGraph | None:
         """Promote and persist one admitted measured-variance proposal."""
 
@@ -140,7 +140,7 @@ class DifferentialFlow:
             ProposalPromotionRequest(
                 source=source,
                 proposal=result.graph,
-                evidence_fields=frozenset(evidence_response_fields(evidence)),
+                evidence_fields=frozenset(response_fields(evidence)),
                 action_ids=(action_id,),
                 duration_thresholds=timing_thresholds(action_id, report),
                 evidence_refs=frozenset(result.observation_ids),

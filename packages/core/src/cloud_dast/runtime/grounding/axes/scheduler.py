@@ -9,13 +9,13 @@ from collections.abc import Callable, Iterator, Sequence
 from cloud_dast.ports import GroundingRunner
 from cloud_dast.qdl.graph import QdlGraph
 from cloud_dast.runtime.grounding.results import AxisResult
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.scheduler")
 
 AxisTask = tuple[str, tuple[str, ...]]
 GroundBatch = Callable[
-    [str, tuple[str, ...], QdlGraph, QdlGraph, EvidenceView | None], AxisResult
+    [str, tuple[str, ...], QdlGraph, QdlGraph, View | None], AxisResult
 ]
 
 
@@ -47,7 +47,7 @@ class AxisTaskScheduler:
         graph: QdlGraph,
         cache_source: QdlGraph,
         *,
-        evidence: EvidenceView | None,
+        evidence: View | None,
     ) -> Iterator[tuple[str, tuple[str, ...], AxisResult]]:
         """Yield results as batches complete, isolating task failures."""
 

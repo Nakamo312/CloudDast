@@ -20,7 +20,7 @@ from cloud_dast.verification.norms import (
 
 
 @dataclass(frozen=True, slots=True)
-class ClassificationLead:
+class Lead:
     """One parked classification suspicion with its deterministic verdict."""
 
     norm_id: str
@@ -37,42 +37,12 @@ class ClassificationLead:
         return self.verdict.rationale
 
 
-class ClassificationLeadOracle:
-    """Score classification suspicions without executing or promoting them."""
-
-    def evaluate(self, norm: NormView) -> PolicyVerdict:
-        """Return the deterministic verdict for one lead norm."""
-
-        if not norm.lead:
-            return self._unscoreable("norm is not a classification lead")
-        return self._unscoreable(
-            f"protected role {lead_role(norm)!r} has no provenance; "
-            "the classification is parked as a lead for operator review"
-        )
-
-    @staticmethod
-    def _unscoreable(rationale: str) -> PolicyVerdict:
-        return PolicyVerdict(
-            status=VerdictStatus.UNSCOREABLE,
-            confidence=1.0,
-            rationale=rationale,
-            model_id="classification-lead",
-            deterministic=True,
-            grounded=False,
-        )
-
-
-def evaluate_classification_leads(
-    graph: QdlGraph | None,
-    *,
-    oracle: ClassificationLeadOracle | None = None,
-) -> tuple[ClassificationLead, ...]:
+def evaluate(graph: QdlGraph | None) -> tuple[Lead, ...]:
     """Evaluate every lead norm carried by a runtime QDL graph."""
 
     if graph is None:
         return ()
-    lead_oracle = oracle or ClassificationLeadOracle()
-    leads: list[ClassificationLead] = []
+    leads: list[Lead] = []
     for fact in graph.facts:
         if fact.context is not Context.PROPOSAL or fact.predicate.name != "prevents":
             continue
@@ -84,17 +54,27 @@ def evaluate_classification_leads(
         except ValueError:
             continue
         leads.append(
-            ClassificationLead(
+            Lead(
                 norm_id=norm_id,
-                role=lead_role(view),
-                effect=term_text(view.effect),
-                verdict=lead_oracle.evaluate(view),
+                role=read_role(view),
+                effect=render_term(view.effect),
+                verdict=PolicyVerdict(
+                    status=VerdictStatus.UNSCOREABLE,
+                    confidence=1.0,
+                    rationale=(
+                        f"protected role {read_role(view)!r} has no provenance; "
+                        "the classification is parked as a lead for operator review"
+                    ),
+                    model_id="classification-lead",
+                    deterministic=True,
+                    grounded=False,
+                ),
             )
         )
     return tuple(sorted(leads, key=lambda lead: lead.norm_id))
 
 
-def lead_role(norm: NormView) -> str:
+def read_role(norm: NormView) -> str:
     """Return the protected role encoded in one lead norm identifier."""
 
     norm_id = atom_value(norm.compiled.norm_fact.args[0])
@@ -104,11 +84,11 @@ def lead_role(norm: NormView) -> str:
     return "unknown"
 
 
-def term_text(term: object) -> str:
+def render_term(term: object) -> str:
     """Render one QDL term in the compact report notation."""
 
     if isinstance(term, Atom):
         return str(term.value)
     if isinstance(term, Struct):
-        return f"{term.name}({', '.join(term_text(arg) for arg in term.args)})"
+        return f"{term.name}({', '.join(render_term(arg) for arg in term.args)})"
     return canonical_json(term)

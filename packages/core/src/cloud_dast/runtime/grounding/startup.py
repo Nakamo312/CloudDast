@@ -26,7 +26,7 @@ from cloud_dast.runtime.grounding.axes.scheduler import AxisTaskScheduler
 from cloud_dast.runtime.grounding.axes.slicing import build_axis_slice
 from cloud_dast.runtime.grounding.config import GrounderOptions
 from cloud_dast.runtime.grounding.results import AxisResult
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import BoundedSlice
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.parallel")
@@ -72,7 +72,7 @@ class Bootstrap:
         graph: QdlGraph,
         *,
         cache_source: QdlGraph | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> QdlGraph:
         """Run all axis batches and merge comparable intersections."""
 
@@ -88,7 +88,7 @@ class Bootstrap:
         graph: QdlGraph,
         *,
         cache_source: QdlGraph | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> tuple[tuple[Axis, str, QdlGraph], ...]:
         """Collect the staged results and report aggregate batch telemetry."""
 
@@ -117,7 +117,7 @@ class Bootstrap:
         graph: QdlGraph,
         *,
         cache_source: QdlGraph | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> Iterator[tuple[Axis, str, QdlGraph]]:
         """Yield each valid proposal in completion order across both stages."""
 
@@ -135,7 +135,7 @@ class Bootstrap:
         graph: QdlGraph,
         *,
         cache_source: QdlGraph | None,
-        evidence: EvidenceView | None,
+        evidence: View | None,
         streaming: bool,
     ) -> Iterator[tuple[Axis, tuple[str, ...], AxisResult]]:
         """Own batching and the semantic barrier before scheduling norms."""
@@ -204,7 +204,7 @@ class Bootstrap:
         action_ids: tuple[str, ...],
         graph: QdlGraph,
         cache_source: QdlGraph,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> AxisResult:
         """Ground one startup axis batch, using its cache slice."""
 
@@ -256,7 +256,7 @@ class Bootstrap:
         *,
         background: QdlGraph,
         context_extra: Mapping[str, Any] | None = None,
-        evidence: EvidenceView | None = None,
+        evidence: View | None = None,
     ) -> AxisResult:
         """Dispatch and validate one already-built startup slice."""
 

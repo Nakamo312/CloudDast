@@ -79,6 +79,7 @@ from cloud_dast.verification.contract_projection import (
 )
 from cloud_dast.verification.oracles import PrimitiveOracleRouter
 from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_reporting import CoverageSnapshot, PhaseChanged, PlanReady
 from tests.support.guardrails import AllowAllGuardrail
@@ -661,7 +662,9 @@ def test_latency_campaign_reaches_fixed_point(
     runner = assemble_runner(
         _service((method_spec,), target, bus),
         event_projection,
-        primitive_oracle=PrimitiveOracleRouter(latency_oracle=oracle),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(latency_oracle=oracle)
+        ),
     )
     if not delivered:
 

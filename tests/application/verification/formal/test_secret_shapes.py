@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from cloud_dast.qdl.graph import Context
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.secret_shapes import secret_shape_graph
 
 
-def _evidence(leaves: list[tuple[str, object]]) -> EvidenceView:
-    return EvidenceView(
+def _evidence(leaves: list[tuple[str, object]]) -> View:
+    return View(
         data={
             "response": {
                 "leaves": [{"path": path, "value": value} for path, value in leaves]

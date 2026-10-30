@@ -30,7 +30,7 @@ from cloud_dast.runtime.grounding.config import GrounderOptions
 from cloud_dast.runtime.grounding.inputs import BranchCall, PairInput, ReactiveCall
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.verification.evidence import (
-    EvidenceView,
+    View,
     build_evidence_view,
     build_paired_evidence_view,
 )
@@ -249,7 +249,7 @@ class Followup:
         call: BranchCall,
         sibling_slice: SiblingActionSlice,
         slice_: BoundedSlice,
-    ) -> tuple[dict[str, Any], EvidenceView | None]:
+    ) -> tuple[dict[str, Any], View | None]:
         """Build bounded branch evidence and consultation context."""
 
         context: dict[str, Any] = {
@@ -372,7 +372,7 @@ class Followup:
         slice_: BoundedSlice,
         request: ConsultationRequest,
         *,
-        evidence: EvidenceView | None,
+        evidence: View | None,
     ) -> AxisResult:
         """Dispatch and apply the shared reactive result boundary."""
 

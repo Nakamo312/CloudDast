@@ -23,8 +23,8 @@ from cloud_dast.runtime.candidates.feedback import (
 from cloud_dast.runtime.execution.checks import run_check
 from cloud_dast.verification.differential.report import DiffReport
 from cloud_dast.verification.evidence import (
-    EvidenceBudget,
-    EvidenceView,
+    Budget,
+    View,
     build_evidence_view,
     build_execution_feedback_view,
     build_paired_evidence_view,
@@ -34,7 +34,7 @@ from cloud_dast.verification.evidence import (
 @pytest.mark.parametrize("cap", [1, 64, 1023])
 def test_evidence_budget_requires_space_for_metadata(cap) -> None:
     with pytest.raises(ValueError, match="max_total_bytes must be at least 1024"):
-        EvidenceBudget(max_total_bytes=cap)
+        Budget(max_total_bytes=cap)
 
 
 def test_default_evidence_budget_includes_rendered_separator_overhead() -> None:
@@ -49,7 +49,7 @@ def test_default_evidence_budget_includes_rendered_separator_overhead() -> None:
     view = build_evidence_view(observation=observation)
     rendered_bytes = len(json.dumps(view.to_dict(), ensure_ascii=False).encode("utf-8"))
 
-    assert rendered_bytes <= EvidenceBudget().max_total_bytes
+    assert rendered_bytes <= Budget().max_total_bytes
 
 
 @pytest.mark.parametrize(
@@ -75,7 +75,7 @@ def test_default_evidence_budget_includes_rendered_separator_overhead() -> None:
 )
 def test_explicit_invalid_evidence_budget_is_not_ignored(metadata) -> None:
     with pytest.raises(ValueError, match="invalid evidence budget metadata"):
-        EvidenceView(
+        View(
             data={"kind": "observation", "label": "x" * 2000, "budget": metadata},
             original_digest="original",
         )
@@ -151,7 +151,7 @@ def test_evidence_byte_cap_includes_unicode_and_json_escaping(cap, character) ->
     )
 
     view = build_evidence_view(
-        observation=observation, budget=EvidenceBudget(max_total_bytes=cap)
+        observation=observation, budget=Budget(max_total_bytes=cap)
     )
 
     for data in (view.data, view.to_dict()):
@@ -389,7 +389,7 @@ def test_execution_feedback_budget_keeps_the_latest_attempt() -> None:
 
     view = build_execution_feedback_view(
         ExecutionFeedback(entries=entries),
-        budget=EvidenceBudget(max_leaves=1),
+        budget=Budget(max_leaves=1),
     )
     data = view.to_dict()
 
@@ -443,7 +443,7 @@ def test_evidence_total_budget_is_enforced() -> None:
         response_summary="ok",
         response_tree=tuple((f"leaf.{index}", "v" * 48) for index in range(256)),
     )
-    budget = EvidenceBudget(
+    budget = Budget(
         max_leaves=1024,
         max_string_chars=64,
         max_total_bytes=4096,
@@ -482,7 +482,7 @@ def test_evidence_json_copy_is_detached_and_digest_is_stable() -> None:
     payload = {
         "response": {"leaves": [{"path": "value", "value": {"nested": ["original"]}}]}
     }
-    view = EvidenceView(data=payload, original_digest="original-identity")
+    view = View(data=payload, original_digest="original-identity")
     digest = view.digest
     payload["response"]["leaves"][0]["value"]["nested"].append("caller-mutated")
     rendered = view.to_dict()
@@ -518,13 +518,13 @@ def test_manual_budget_normalization_is_idempotent(cap) -> None:
             "truncated": False,
         },
     }
-    view = EvidenceView(data=data, original_digest="original")
+    view = View(data=data, original_digest="original")
     rendered = view.to_dict()
     assert len(json.dumps(rendered, ensure_ascii=False).encode()) <= cap
     assert rendered["budget"]["max_total_bytes"] == cap
     assert view.truncated is True
     for _ in range(3):
-        repeated = EvidenceView(data=rendered, original_digest=view.original_digest)
+        repeated = View(data=rendered, original_digest=view.original_digest)
         assert repeated.to_dict() == rendered
         assert repeated.digest == view.digest
         assert repeated.truncated is True
@@ -539,7 +539,7 @@ def test_original_digest_is_independent_of_projection_budget() -> None:
         response_summary="x" * 5000,
     )
     small = build_evidence_view(
-        observation=observation, budget=EvidenceBudget(max_total_bytes=1024)
+        observation=observation, budget=Budget(max_total_bytes=1024)
     )
     default = build_evidence_view(observation=observation)
     assert small.original_digest == default.original_digest

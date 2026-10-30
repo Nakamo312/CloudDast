@@ -13,10 +13,7 @@ from cloud_dast.qdl.graph import (
     has,
 )
 from cloud_dast.verification.norms import NormView
-from cloud_dast.verification.oracles import (
-    ClassificationLeadOracle,
-    evaluate_classification_leads,
-)
+from cloud_dast.verification.oracles import leads
 
 LEAD_WITNESS = field(Atom(value="resource:user"), Atom(value="email"))
 
@@ -69,8 +66,8 @@ def test_lead_norm_view_requires_the_lead_prefix() -> None:
         NormView.from_lead_fact(_lead_fact(norm_id="norm:hypothesis"))
 
 
-def test_classification_lead_oracle_returns_unscoreable_not_fail() -> None:
-    verdict = ClassificationLeadOracle().evaluate(NormView.from_lead_fact(_lead_fact()))
+def test_evaluate_returns_unscoreable_not_fail() -> None:
+    verdict = leads.evaluate(_lead_graph(_lead_fact()))[0].verdict
 
     assert verdict.status is VerdictStatus.UNSCOREABLE
     assert verdict.deterministic is True
@@ -83,14 +80,31 @@ def test_evaluate_classification_leads_scores_only_lead_norms() -> None:
     ordinary = _lead_fact(norm_id="norm:no-leak")
     graph = _lead_graph(_lead_fact(), ordinary)
 
-    leads = evaluate_classification_leads(graph)
+    result = leads.evaluate(graph)
 
-    assert [lead.norm_id for lead in leads] == ["norm:lead:sensitive:0123456789ab"]
-    assert leads[0].role == "sensitive"
-    assert leads[0].effect == "has(principal:attacker, field(resource:user, email))"
-    assert leads[0].verdict.status is VerdictStatus.UNSCOREABLE
-    assert leads[0].verdict_status == "unscoreable"
+    assert [lead.norm_id for lead in result] == ["norm:lead:sensitive:0123456789ab"]
+    assert result[0].role == "sensitive"
+    assert result[0].effect == "has(principal:attacker, field(resource:user, email))"
+    assert result[0].verdict.status is VerdictStatus.UNSCOREABLE
+    assert result[0].verdict_status == "unscoreable"
 
 
 def test_evaluate_classification_leads_accepts_a_missing_graph() -> None:
-    assert evaluate_classification_leads(None) == ()
+    assert leads.evaluate(None) == ()
+
+
+@pytest.mark.parametrize(
+    "context", tuple(context for context in Context if context is not Context.PROPOSAL)
+)
+def test_evaluate_classification_leads_ignores_non_proposal_contexts(context) -> None:
+    fact = _lead_fact().model_copy(update={"context": context})
+
+    assert leads.evaluate(_lead_graph(fact)) == ()
+
+
+def test_evaluate_classification_leads_skips_malformed_lead_fact() -> None:
+    fact = _lead_fact()
+    malformed = fact.model_copy(update={"args": (fact.args[0],)})
+    graph = _lead_graph(fact).model_copy(update={"facts": (malformed,)})
+
+    assert leads.evaluate(graph) == ()

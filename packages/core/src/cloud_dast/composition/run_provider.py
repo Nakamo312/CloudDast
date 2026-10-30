@@ -143,6 +143,7 @@ from cloud_dast.verification.oracles import (
     MarkerOracle,
     PrimitiveOracleRouter,
     SequenceOracle,
+    WitnessSignalOracle,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.projection import ObservationProjector
@@ -769,22 +770,31 @@ class RunProvider(Provider):
         return ObservationProjector(oob_events)
 
     @provide(scope=RunScope)
+    def witness_oracle(
+        self,
+        latency_oracle: LatencyOracle,
+        marker_oracle: MarkerOracle,
+        oob_evaluator: OobEvaluator,
+    ) -> WitnessSignalOracle:
+        return WitnessSignalOracle(
+            latency_oracle=latency_oracle,
+            marker_oracle=marker_oracle,
+            oob_oracle=oob_evaluator,
+        )
+
+    @provide(scope=RunScope)
     def primitive_oracle_router(
         self,
         grounded_outcome_oracle: GroundedOutcomeOracle,
         field_exposure_oracle: FieldExposureOracle,
-        latency_oracle: LatencyOracle,
-        marker_oracle: MarkerOracle,
-        oob_evaluator: OobEvaluator,
         sequence_oracle: SequenceOracle,
+        witness_oracle: WitnessSignalOracle,
     ) -> PrimitiveOracleRouter:
         return PrimitiveOracleRouter(
             grounded_oracle=grounded_outcome_oracle,
             field_oracle=field_exposure_oracle,
-            latency_oracle=latency_oracle,
-            marker_oracle=marker_oracle,
-            oob_oracle=oob_evaluator,
             sequence_oracle=sequence_oracle,
+            witness_oracle=witness_oracle,
         )
 
     @provide(scope=RunScope)

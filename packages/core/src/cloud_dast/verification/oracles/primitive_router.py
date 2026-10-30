@@ -10,7 +10,6 @@ from cloud_dast.model import (
     ScenarioPosition,
     VerdictStatus,
 )
-from cloud_dast.ports import OobEvaluator
 from cloud_dast.verification.norms import NormView
 from cloud_dast.verification.oracles.differential import (
     DifferentialOracle,
@@ -21,9 +20,6 @@ from cloud_dast.verification.oracles.field_exposure import (
 from cloud_dast.verification.oracles.grounded import (
     GroundedOutcomeOracle,
 )
-from cloud_dast.verification.oracles.latency import LatencyOracle
-from cloud_dast.verification.oracles.marker import MarkerOracle
-from cloud_dast.verification.oracles.roles import WitnessRolePolicy
 from cloud_dast.verification.oracles.sequence import SequenceOracle
 from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.oracles.witness import WitnessSignalOracle
@@ -43,25 +39,15 @@ class PrimitiveOracleRouter:
         *,
         grounded_oracle: GroundedOutcomeOracle | None = None,
         field_oracle: FieldExposureOracle | None = None,
-        latency_oracle: LatencyOracle | None = None,
-        marker_oracle: MarkerOracle | None = None,
         differential_oracle: DifferentialOracle | None = None,
-        oob_oracle: OobEvaluator | None = None,
         sequence_oracle: SequenceOracle | None = None,
         witness_oracle: WitnessSignalOracle | None = None,
-        witness_policy: WitnessRolePolicy | None = None,
     ) -> None:
         self._grounded = grounded_oracle or GroundedOutcomeOracle()
         self._field = field_oracle or FieldExposureOracle()
-        self._latency = latency_oracle or LatencyOracle()
-        self._marker = marker_oracle or MarkerOracle(witness_policy=witness_policy)
         self._differential = differential_oracle or DifferentialOracle()
         self._sequence = sequence_oracle or SequenceOracle()
-        self._witness = witness_oracle or WitnessSignalOracle(
-            latency_oracle=self._latency,
-            marker_oracle=self._marker,
-            oob_oracle=oob_oracle,
-        )
+        self._witness = witness_oracle or WitnessSignalOracle()
 
     def evaluate_policy(
         self,

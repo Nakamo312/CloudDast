@@ -102,6 +102,7 @@ from cloud_dast.verification.oracles import (
     PrimitiveOracleRouter,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast_fuzzing import (
     GoalPayloadGenerator,
     TemplateGenerator,
@@ -622,7 +623,9 @@ def test_live_workflow_final_sweep_reevaluates_late_oob_callback(
     runner = assemble_runner(
         checker,
         event_projection,
-        primitive_oracle=PrimitiveOracleRouter(oob_oracle=collector),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(oob_oracle=collector)
+        ),
         formal_repository=repository,
     )
     workflow = _workflow(

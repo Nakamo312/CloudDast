@@ -6,7 +6,7 @@ from cloud_dast.contracts.axes import NORMS_AXIS
 from cloud_dast.model.events import normalize_action, normalize_principal
 from cloud_dast.qdl.graph import Context, Fact, QdlGraph, canonical_json
 from cloud_dast.qdl.graph_ops import atom_value, merge_graphs
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import (
     BoundedSlice,
     SliceBudget,
@@ -24,7 +24,7 @@ def build_axis_slice(
     graph: QdlGraph,
     action_ids: tuple[str, ...],
     *,
-    evidence: EvidenceView | None,
+    evidence: View | None,
     budget: SliceBudget,
 ) -> BoundedSlice:
     """Build one axis slice, reserving policy context for norms."""

@@ -7,13 +7,17 @@ import pytest
 
 import cloud_dast.composition.run_provider as providers
 from cloud_dast.composition.container import make_cloud_dast_container
+from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.infrastructure.events import JsonlEventStore
 from cloud_dast.infrastructure.runtime import OobCollaborator
-from cloud_dast.model import AccessOutcome, Observation
+from cloud_dast.model import AccessOutcome, Observation, Severity, VerdictStatus
 from cloud_dast.ports import EvidenceChannel, OobEvaluator, OobUrlFactory
+from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, duration
 from cloud_dast.runtime import oob
 from cloud_dast.runtime.campaign import LiveWorkflow
+from cloud_dast.verification.oracles.latency import LatencyOracle
 from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 
 
 def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
@@ -35,6 +39,7 @@ def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
             coordinator = run.get(oob.Coordinator)
             assert run.get(OobEvaluator) is coordinator
             router = run.get(PrimitiveOracleRouter)
+            assert router._witness is run.get(WitnessSignalOracle)
             assert router._witness._oob is coordinator
             workflow = run.get(LiveWorkflow)
             assert workflow._finalizer._oob is coordinator
@@ -42,6 +47,58 @@ def test_real_run_provider_binds_one_oob_owner_per_run(tmp_path, monkeypatch):
             assert coordinator._events is channel
         with app() as run:
             assert run.get(oob.Coordinator) is not coordinator
+
+
+def test_router_uses_run_calibration_without_leaking_to_next_run(
+    tmp_path, monkeypatch, method_spec, scenario_position
+):
+    monkeypatch.setenv("CLOUD_DAST_STAND_SOURCE", "neo4j")
+    monkeypatch.delenv("CLOUD_DAST_LATENCY_BASELINES", raising=False)
+    action = Atom(value=f"action:{method_spec.method_id}")
+    invariant = InvariantProjection(
+        invariant_id="latency",
+        norm_id="norm:latency",
+        statement="bounded latency",
+        severity=Severity.HIGH,
+        norm_fact=Fact(
+            context=Context.ACCEPTED,
+            predicate=Predicate.from_name("prevents"),
+            args=(Atom(value="norm:latency"), duration(action, Atom(value=100))),
+        ),
+    )
+    observation = Observation(
+        check_id="check",
+        scenario_id=scenario_position.scenario_id,
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary="OK",
+        duration_ms=200,
+    )
+    container = make_cloud_dast_container(
+        lambda: nullcontext(),
+        lambda check: None,
+        JsonlEventStore(tmp_path / "events.jsonl"),
+    )
+    with container as app:
+        for calibrated in (True, False):
+            with app() as run:
+                router = run.get(PrimitiveOracleRouter)
+                if calibrated:
+                    run.get(LatencyOracle).update_baseline(
+                        method_spec.method_id, (100, 100, 100)
+                    )
+                verdict = router.evaluate_policy(
+                    invariant,
+                    (observation,),
+                    method=method_spec,
+                    scenario=scenario_position,
+                )
+                if calibrated:
+                    assert verdict.status is VerdictStatus.FAIL
+                    assert verdict.deterministic and verdict.grounded
+                    assert verdict.evidence_refs == (observation.observation_id,)
+                else:
+                    assert verdict.status is VerdictStatus.UNSCOREABLE
+                    assert "no runtime latency baseline" in verdict.rationale
 
 
 @pytest.mark.parametrize("abort", [False, True])

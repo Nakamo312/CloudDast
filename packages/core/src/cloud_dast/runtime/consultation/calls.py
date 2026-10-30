@@ -17,7 +17,7 @@ from cloud_dast.runtime.differential.results import VarianceRecord
 from cloud_dast.runtime.grounding.inputs import PairInput
 from cloud_dast.runtime.grounding.results import AxisResult
 from cloud_dast.runtime.grounding.variance import DifferentialFlow
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import SiblingActionSlice
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ class PlannedItem:
     work_item: WorkItem
     observation: Observation | None
     check: Check | None
-    evidence: EvidenceView | None
+    evidence: View | None
     siblings: SiblingActionSlice | None
     variance: VarianceRecord | None
 
@@ -104,7 +104,7 @@ class Invoker:
         source: QdlGraph,
         observation,
         check: Check | None,
-        evidence: EvidenceView | None,
+        evidence: View | None,
         sibling_slice: SiblingActionSlice | None = None,
     ) -> AxisResult | None:
         """Prepare the proposal selected by the existing consultation routing."""

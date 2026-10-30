@@ -1,6 +1,6 @@
 """Bounded, model-facing projection of already captured runtime evidence.
 
-``EvidenceView`` is deliberately not a new world model: it is a lossy,
+``View`` is deliberately not a new world model: it is a lossy,
 content-addressed view over the existing ``Check``, ``Observation``,
 ``DiffReport``, execution trace, and OOB-event objects.  The model receives
 it as structured JSON in ``ModelRequest.context``; it never becomes the
@@ -32,7 +32,7 @@ _RESERVED_BUDGET_BYTES = 1024
 
 
 @dataclass(frozen=True, slots=True)
-class EvidenceBudget:
+class Budget:
     """Bounds for model-facing evidence, including a minimum 1 KiB envelope."""
 
     max_leaves: int = 1024
@@ -50,13 +50,13 @@ class EvidenceBudget:
             raise ValueError("max_total_bytes must be at least 1024")
 
 
-DEFAULT_EVIDENCE_BUDGET = EvidenceBudget()
+DEFAULT_EVIDENCE_BUDGET = Budget()
 _TRUNCATED_PREVIEW_CHARS = 256
 _BINARY_PREVIEW_CHARS = 128
 
 
 @dataclass(frozen=True, slots=True)
-class EvidenceView:
+class View:
     """One bounded JSON projection with original and rendered digests."""
 
     data: Mapping[str, Any]
@@ -81,7 +81,7 @@ class EvidenceView:
     model_dump = to_dict
 
 
-def evidence_response_fields(evidence: EvidenceView | None) -> set[str]:
+def response_fields(evidence: View | None) -> set[str]:
     """Return every response-leaf path projected to the model."""
 
     if evidence is None:
@@ -113,8 +113,8 @@ def build_evidence_view(
     observation: Observation | None = None,
     oob_events: Sequence[EvidenceEvent] = (),
     label: str = "observation",
-    budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-) -> EvidenceView:
+    budget: Budget = DEFAULT_EVIDENCE_BUDGET,
+) -> View:
     """Build one bounded observation view.
 
     Values remain available to local consumers and model contexts under the
@@ -138,8 +138,8 @@ def build_paired_evidence_view(
     treatment: Observation,
     report: DiffReport | None = None,
     oob_events: Sequence[EvidenceEvent] = (),
-    budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-) -> EvidenceView:
+    budget: Budget = DEFAULT_EVIDENCE_BUDGET,
+) -> View:
     """Build a control/treatment view with value-bearing path differences."""
 
     control_context = _observation_context(
@@ -172,8 +172,8 @@ def build_paired_evidence_view(
 def build_execution_feedback_view(
     feedback: ExecutionFeedback,
     *,
-    budget: EvidenceBudget = DEFAULT_EVIDENCE_BUDGET,
-) -> EvidenceView:
+    budget: Budget = DEFAULT_EVIDENCE_BUDGET,
+) -> View:
     """Build a bounded history of executed candidates and their outcomes.
 
     The view contains the request, full projected response, trace/resource
@@ -398,8 +398,8 @@ def _response_values(observation: Observation) -> dict[str, Any]:
 
 def _bounded_view(
     raw: Mapping[str, Any],
-    budget: EvidenceBudget,
-) -> EvidenceView:
+    budget: Budget,
+) -> View:
     original_json = _canonical_json(raw)
     original_digest = _sha256(original_json)
     working = _json_copy(raw)
@@ -421,7 +421,7 @@ def _bounded_view(
     bounded["budget"] = metadata
     _enforce_total_budget(bounded, budget, initial_dropped=dropped)
     metadata["truncated"] = bool(metadata["truncated"] or dropped)
-    return EvidenceView(
+    return View(
         data=bounded,
         original_digest=original_digest,
     )
@@ -495,7 +495,7 @@ def _at_path(value: Any, path: tuple[Any, ...]) -> Any:
     return container
 
 
-def _bound_value(value: Any, budget: EvidenceBudget) -> Any:
+def _bound_value(value: Any, budget: Budget) -> Any:
     if isinstance(value, str):
         if _is_binary(value):
             return _encoded_value(
@@ -524,7 +524,7 @@ def _bound_value(value: Any, budget: EvidenceBudget) -> Any:
 
 def _encoded_value(
     value: str,
-    budget: EvidenceBudget,
+    budget: Budget,
     *,
     encoding: str,
     preview: str,
@@ -537,7 +537,7 @@ def _encoded_value(
     }
 
 
-def _bound_key(key: str, budget: EvidenceBudget) -> str:
+def _bound_key(key: str, budget: Budget) -> str:
     if len(key) <= budget.max_string_chars and not _is_binary(key):
         return key
     encoded = _encoded_value(
@@ -559,7 +559,7 @@ def _is_binary(value: str) -> bool:
 
 def _enforce_total_budget(
     value: dict[str, Any],
-    budget: EvidenceBudget,
+    budget: Budget,
     *,
     initial_dropped: int,
 ) -> None:
@@ -688,7 +688,7 @@ def _enforce_budget(value: dict[str, Any]) -> None:
     try:
         if not isinstance(metadata, dict):
             raise TypeError
-        budget = EvidenceBudget(
+        budget = Budget(
             max_leaves=int(metadata["max_leaves"]),
             max_string_chars=int(metadata["max_string_chars"]),
             max_total_bytes=int(metadata["max_total_bytes"]),

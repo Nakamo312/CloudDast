@@ -26,7 +26,7 @@ from cloud_dast.qdl.graph import (
     canonical_json,
     output_field,
 )
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 
 _SECRET_SHAPES: tuple[re.Pattern[str], ...] = (
     re.compile(r"^eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\."),
@@ -39,7 +39,7 @@ _SECRET_SHAPES: tuple[re.Pattern[str], ...] = (
 
 def secret_shape_graph(
     action_ids: tuple[str, ...],
-    evidence: EvidenceView | None,
+    evidence: View | None,
 ) -> QdlGraph | None:
     """Produce proposal leads from single-action values matching secret shapes."""
 

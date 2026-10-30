@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, get_args
 
 from cloud_dast.model import (
     Check,
@@ -31,14 +31,7 @@ ProfileFactor = Literal[
     "addressing_mode",
 ]
 
-_PROFILE_FACTORS: tuple[ProfileFactor, ...] = (
-    "scope_relation",
-    "binding_level",
-    "endpoint_layer",
-    "resource_state",
-    "identity_class",
-    "addressing_mode",
-)
+_PROFILE_FACTORS: tuple[ProfileFactor, ...] = get_args(ProfileFactor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,14 +81,7 @@ class DifferentialSpec:
 def _profile_factors(profile: ScenarioProfile) -> tuple[object, ...]:
     """Return dimensions relevant to one differential comparison."""
 
-    return (
-        profile.scope_relation,
-        profile.binding_level,
-        profile.endpoint_layer,
-        profile.resource_state,
-        profile.identity_class,
-        profile.addressing_mode,
-    )
+    return tuple(getattr(profile, factor) for factor in _PROFILE_FACTORS)
 
 
 @dataclass(frozen=True, slots=True)

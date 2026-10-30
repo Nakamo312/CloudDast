@@ -14,7 +14,7 @@ from cloud_dast.model import (
     Severity,
     VerdictStatus,
 )
-from cloud_dast.verification.oracles import ClassificationLead
+from cloud_dast.verification.oracles import leads
 from cloud_dast_reporting import (
     CampaignInfo,
     CampaignMetricsSnapshot,
@@ -84,8 +84,8 @@ def _coverage() -> CoverageMatrix:
     )
 
 
-def _lead() -> ClassificationLead:
-    return ClassificationLead(
+def _lead() -> leads.Lead:
+    return leads.Lead(
         norm_id="norm:lead:sensitive:0123456789ab",
         role="sensitive",
         effect="has(principal:attacker, field(resource:user, email))",

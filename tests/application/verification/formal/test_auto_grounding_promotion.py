@@ -40,7 +40,7 @@ from cloud_dast.verification.contract_projection import (
 )
 from cloud_dast.verification.evidence import (
     build_evidence_view,
-    evidence_response_fields,
+    response_fields,
 )
 from cloud_dast.verification.promotion import (
     _filter_response_semantics,
@@ -175,7 +175,7 @@ def _promote(source: QdlGraph, proposal: QdlGraph, **kwargs: object):
         ProposalPromotionRequest(
             source,
             proposal,
-            evidence_fields=frozenset(evidence_response_fields(evidence)),
+            evidence_fields=frozenset(response_fields(evidence)),
             **kwargs,
         )
     )

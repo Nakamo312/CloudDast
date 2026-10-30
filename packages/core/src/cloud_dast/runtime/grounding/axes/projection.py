@@ -20,7 +20,7 @@ from cloud_dast.runtime.grounding.axes.filtering import (
     _response_semantics_graph,
 )
 from cloud_dast.runtime.grounding.results import AxisResult
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import BoundedSlice
 
 logger = logging.getLogger("cloud_dast.runtime.grounding.parallel")
@@ -58,7 +58,7 @@ def build_axis_result(
     action_ids: tuple[str, ...],
     slice_: BoundedSlice,
     *,
-    evidence: EvidenceView | None,
+    evidence: View | None,
     proposal: QdlGraph | None,
     issue_count: int,
     uncertainties: tuple[tuple[str, str], ...],

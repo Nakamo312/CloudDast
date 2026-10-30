@@ -140,6 +140,7 @@ RunScope providers:
   template_generator
   test_case_generator
   textual_generator
+  witness_oracle
   workflow_options
 Explicit ports:
   EventPublisher

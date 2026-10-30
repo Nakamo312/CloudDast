@@ -20,6 +20,7 @@ from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.verification.oracles import oob as verification_oob
 from cloud_dast.verification.oracles.primitive_router import PrimitiveOracleRouter
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 
 
 @pytest.fixture
@@ -147,7 +148,9 @@ def test_late_oob_router_verdict_passes_final_finding_gate(
     channel = MemoryEvidenceChannel()
     channel.set_ready(True)
     collector = create_collector(channel, wait_seconds=0.0)
-    router = PrimitiveOracleRouter(oob_oracle=collector)
+    router = PrimitiveOracleRouter(
+        witness_oracle=WitnessSignalOracle(oob_oracle=collector)
+    )
     invariant = _invariant("late", method_spec.method_id)
     observation = _observation("late", "unique-candidate")
     check = Check(

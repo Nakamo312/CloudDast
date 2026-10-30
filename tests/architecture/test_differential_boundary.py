@@ -1296,7 +1296,7 @@ def test_qdl_and_verification_projection_owners_are_single() -> None:
     from cloud_dast.qdl.couplings import FieldCoupling
     from cloud_dast.qdl.field_roles import FieldRolePolicy
     from cloud_dast.qdl.roles import SemanticRole
-    from cloud_dast.verification.evidence import EvidenceView
+    from cloud_dast.verification.evidence import View
     from cloud_dast.verification.norms import NormCompiler, NormView
     from cloud_dast.verification.slices import BoundedSlice
 
@@ -1306,7 +1306,7 @@ def test_qdl_and_verification_projection_owners_are_single() -> None:
     assert NormCompiler.__module__ == "cloud_dast.verification.norms"
     assert SemanticRole.__module__ == "cloud_dast.qdl.roles"
     assert NormView.__module__ == "cloud_dast.verification.norms"
-    assert EvidenceView.__module__ == "cloud_dast.verification.evidence"
+    assert View.__module__ == "cloud_dast.verification.evidence"
     assert BoundedSlice.__module__ == "cloud_dast.verification.slices"
     for old_path in (
         "application/verification/formal/field_roles.py",

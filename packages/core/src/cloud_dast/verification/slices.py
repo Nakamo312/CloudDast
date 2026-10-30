@@ -34,7 +34,7 @@ from cloud_dast.qdl.graph import (
     collect_references,
 )
 from cloud_dast.qdl.graph_ops import atom_value
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 
 SLICE_VERSION = 1
 DEFAULT_BYTES_PER_TOKEN = 4
@@ -84,7 +84,7 @@ class BoundedSlice:
     """One bounded QDL neighbourhood with its runtime evidence projection."""
 
     graph: QdlGraph
-    evidence: EvidenceView | None = None
+    evidence: View | None = None
     actions: tuple[str, ...] = ()
     depth: int = 0
     token_estimate: int = 0
@@ -284,7 +284,7 @@ def build_slice(
     graph: QdlGraph,
     *,
     actions: Sequence[str] = (),
-    evidence: EvidenceView | None = None,
+    evidence: View | None = None,
     budget: SliceBudget = DEFAULT_SLICE_BUDGET,
 ) -> BoundedSlice:
     """Build a deterministic, self-contained slice around seed actions.
@@ -293,7 +293,7 @@ def build_slice(
     ``budget.max_depth`` hops.  The result is then assembled central facts
     first and trimmed until the graph and the attached evidence fit
     ``budget.max_tokens``.  Runtime evidence is never rewritten or dropped
-    here: it is the already bounded ``EvidenceView`` projection of captured
+    here: it is the already bounded ``View`` projection of captured
     events, and the graph shrinks to the tokens that remain after it.
     """
 
@@ -712,7 +712,7 @@ def _graph_tokens(
 
 def fingerprint(
     graph: QdlGraph,
-    evidence: EvidenceView | None,
+    evidence: View | None,
     actions: Sequence[str],
 ) -> str:
     """Hash the exact model-facing slice content."""

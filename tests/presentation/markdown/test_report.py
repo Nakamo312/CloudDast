@@ -35,7 +35,7 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.state_machine import state_machine_graph
 from cloud_dast.verification.coverage import Builder
-from cloud_dast.verification.oracles import ClassificationLead
+from cloud_dast.verification.oracles import leads
 from cloud_dast.verification.term_coverage import evidence_target_fact
 from cloud_dast_reporting import (
     CampaignInfo,
@@ -180,7 +180,7 @@ def test_report_without_coverage_keeps_previous_format() -> None:
 
 
 def test_report_renders_classification_leads_without_findings() -> None:
-    lead = ClassificationLead(
+    lead = leads.Lead(
         norm_id="norm:lead:sensitive:0123456789ab",
         role="sensitive",
         effect="has(principal:attacker, field(resource:user, email))",
@@ -267,7 +267,7 @@ def test_report_encodes_target_controlled_markdown_values() -> None:
         ),
         stand=StandState(),
     )
-    lead = ClassificationLead(
+    lead = leads.Lead(
         norm_id=unsafe,
         role=unsafe,
         effect=unsafe,

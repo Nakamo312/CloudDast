@@ -1,11 +1,6 @@
-"""Business services that classify verification observations."""
+"""Deterministic evidence scoring and parked proposal leads."""
 
 from cloud_dast.verification.norms import NormView
-from cloud_dast.verification.oracles.classification_lead import (
-    ClassificationLead,
-    ClassificationLeadOracle,
-    evaluate_classification_leads,
-)
 from cloud_dast.verification.oracles.differential import (
     DifferentialOracle,
 )
@@ -34,8 +29,6 @@ from cloud_dast.verification.witness import (
 )
 
 __all__ = [
-    "ClassificationLead",
-    "ClassificationLeadOracle",
     "DifferentialOracle",
     "FieldExposureOracle",
     "GroundedOutcomeOracle",
@@ -51,5 +44,4 @@ __all__ = [
     "KnownContentWitness",
     "WitnessSignalOracle",
     "WitnessRolePolicy",
-    "evaluate_classification_leads",
 ]

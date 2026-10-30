@@ -41,6 +41,7 @@ from cloud_dast.verification.oracles.action_alignment import (
     ACTION_MISMATCH_RATIONALE,
     actions_align,
 )
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 
 
 class _ReadyEventStore:
@@ -202,7 +203,9 @@ def _action_bound_case(
             duration(action, Atom(value=110)),
             _observation(duration_ms=111.0),
             PrimitiveOracleRouter(
-                latency_oracle=LatencyOracle({method.method_id: baseline})
+                witness_oracle=WitnessSignalOracle(
+                    latency_oracle=LatencyOracle({method.method_id: baseline})
+                )
             ),
         )
     if primitive == "marker":
@@ -238,7 +241,9 @@ def _action_bound_case(
         return (
             external_call(action, Atom(value="dast-oob-marker")),
             _observation(probe_marker="dast-oob-marker"),
-            PrimitiveOracleRouter(oob_oracle=oracle),
+            PrimitiveOracleRouter(
+                witness_oracle=WitnessSignalOracle(oob_oracle=oracle)
+            ),
         )
     raise ValueError(f"unsupported primitive {primitive!r}")
 

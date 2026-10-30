@@ -79,6 +79,7 @@ from cloud_dast.verification.oracles.latency import LatencyOracle
 from cloud_dast.verification.oracles.primitive_router import (
     PrimitiveOracleRouter,
 )
+from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast_fuzzing import TemplateGenerator
 from cloud_dast_fuzzing.strategies.goal_payload import (
     GoalPayloadGenerator,
@@ -471,7 +472,9 @@ def _build_campaign(
         service_workflow,
         event_projection,
         grounded_oracle=GroundedOutcomeOracle(),
-        primitive_oracle=PrimitiveOracleRouter(latency_oracle=latency_oracle),
+        primitive_oracle=PrimitiveOracleRouter(
+            witness_oracle=WitnessSignalOracle(latency_oracle=latency_oracle)
+        ),
         formal_repository=repository,
     )
     scenario_repo = scenario_repository or ScenarioRepo()

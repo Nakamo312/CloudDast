@@ -10,7 +10,7 @@ from cloud_dast.model import Check, Observation
 from cloud_dast.ports import EvidenceEvent
 from cloud_dast.qdl.graph import QdlGraph
 from cloud_dast.verification.differential.report import DiffReport
-from cloud_dast.verification.evidence import EvidenceView
+from cloud_dast.verification.evidence import View
 from cloud_dast.verification.slices import SiblingActionSlice
 
 
@@ -25,7 +25,7 @@ class ReactiveCall:
     observation: Observation | None = None
     check: Check | None = None
     oob_events: Sequence[EvidenceEvent] = ()
-    evidence: EvidenceView | None = None
+    evidence: View | None = None
     cache_source: QdlGraph | None = None
 
 
@@ -38,7 +38,7 @@ class BranchCall:
     observation: Observation | None = None
     check: Check | None = None
     oob_events: Sequence[EvidenceEvent] = ()
-    evidence: EvidenceView | None = None
+    evidence: View | None = None
     effect_hint: str = ""
     blocked_reason: str = ""
     sibling_slice: SiblingActionSlice | None = None
@@ -56,7 +56,7 @@ class PairInput:
     control_check: Check | None = None
     treatment_check: Check | None = None
     oob_events: Sequence[EvidenceEvent] = ()
-    evidence: EvidenceView | None = None
+    evidence: View | None = None
 
 
 __all__ = ["BranchCall", "PairInput", "ReactiveCall"]
