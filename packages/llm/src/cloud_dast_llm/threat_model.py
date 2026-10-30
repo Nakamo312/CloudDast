@@ -9,6 +9,12 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from cloud_dast.api import (
+    DEFAULT_SLICE_BUDGET,
+    BoundedSlice,
+    SliceBudget,
+    build_slice,
+)
 from cloud_dast.contracts.proposals import (
     FormalFact,
     FormalModelOutput,
@@ -38,12 +44,6 @@ from cloud_dast.qdl.semantic_norm_compiler import (
     filter_semantic_roles,
 )
 from cloud_dast.qdl.validation import ValidationIssue, ValidationResult
-from cloud_dast.verification.slices import (
-    DEFAULT_SLICE_BUDGET,
-    BoundedSlice,
-    SliceBudget,
-    build_slice,
-)
 
 logger = logging.getLogger(__name__)
 

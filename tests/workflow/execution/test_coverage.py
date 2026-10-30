@@ -48,7 +48,7 @@ from cloud_dast.verification.coverage import (
     _forbidden_state_cells,
     evaluate_term_coverage,
 )
-from cloud_dast.verification.coverage_models import evidence_target_fact
+from cloud_dast.verification.term_coverage import evidence_target_fact
 
 
 def qfact(

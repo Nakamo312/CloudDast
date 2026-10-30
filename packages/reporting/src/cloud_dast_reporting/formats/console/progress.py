@@ -8,10 +8,10 @@ import threading
 import time
 from types import SimpleNamespace
 
+from cloud_dast.api import verified_fact_id
 from cloud_dast.model import events as domain_events
 from cloud_dast.model.events import PhaseChanged
 from cloud_dast.ports import EventSubscriber
-from cloud_dast.verification.evidence_facts import verified_fact_id
 from cloud_dast_reporting import QdlCoverageMatrixView, ReportService
 from cloud_dast_reporting import events as report_events
 

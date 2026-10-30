@@ -37,7 +37,9 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.execution.runner import EventProjection
+from cloud_dast.verification.findings import collect
 from cloud_dast.verification.oracles.latency import LatencyOracle
+from cloud_dast.verification.taxonomy import ClassificationFacts
 
 
 class _EventLog:
@@ -249,7 +251,9 @@ def test_evaluation_uses_incremental_projection_without_full_reads() -> None:
 @pytest.mark.parametrize("physical", [False, True])
 def test_evaluation_uses_current_registry_and_original_check(physical) -> None:
     invariant = _allowed_invariant("list-orders", "current-registry")
-    check = _check(invariant, (("actual", "request"),) if physical else ())
+    check = _check(invariant, (("actual", "request"),) if physical else ()).model_copy(
+        update={"invariant_id": "generation:old"}
+    )
     observation = _observation(check)
     events = _EventLog()
     journal_check = check.model_copy(
@@ -277,7 +281,20 @@ def test_evaluation_uses_current_registry_and_original_check(physical) -> None:
     result = evaluator.evaluate(execution, {invariant.invariant_id: invariant})
 
     assert len(result.findings) == 1
-    assert result.findings[0].minimal_poc == check.request
+    finding = result.findings[0]
+    assert finding.minimal_poc == check.request
+    assert finding.invariant_id == invariant.invariant_id != check.invariant_id
+    assert finding.observation_id == observation.observation_id
+    assert finding.method_id == check.method_id
+    assert finding.scenario_id == observation.scenario_id
+    assert finding.norm_fact == invariant.norm_fact
+    assert (finding.goal_id, finding.path_id, finding.step_id) == (None, "path", "step")
+    assert finding.rationale == "recorded witness"
+    assert finding.confidence == 1.0
+    assert finding.evidence_refs == (observation.observation_id,)
+    assert finding.title == f"Security policy violated: {invariant.invariant_id}"
+    assert finding.description == invariant.statement
+    assert finding.remediation == "Review and enforce the invariant's security policy."
     assert result.replayed_observations == (observation,)
     assert result.replayed_findings == result.findings
     assert len(events._cursors) == 1
@@ -607,6 +624,11 @@ def test_field_names_do_not_change_verdict_or_path() -> None:
         == [finding.path_id for finding in neutral_result.findings]
         == ["path:same"]
     )
+    assert (
+        object_result.findings[0].vulnerability_class
+        == neutral_result.findings[0].vulnerability_class
+        == "function_level_authz"
+    )
 
 
 def test_mutating_resource_effect_raises_a_finding() -> None:
@@ -668,13 +690,14 @@ def test_only_deterministic_grounded_failures_raise_findings() -> None:
     )
 
 
-def test_control_outcome_does_not_raise_a_finding() -> None:
+@pytest.mark.parametrize("status", [VerdictStatus.PASS, VerdictStatus.UNSCOREABLE])
+def test_control_outcome_does_not_raise_a_finding(status) -> None:
     invariant = _allowed_invariant("get-invoice", "control-invoice-read")
     check = _check(invariant, (("invoice_id", "invoice-victim"),))
     observation = _observation(check)
     verdict = _verdict(
         "IAM-grounded expected outcome is ALLOWED; principal has every permission required by the method",
-        status=VerdictStatus.PASS,
+        status=status,
         evidence_refs=(observation.observation_id,),
     )
 
@@ -682,3 +705,59 @@ def test_control_outcome_does_not_raise_a_finding() -> None:
 
     assert result.findings == ()
     assert not any(isinstance(event, FindingRaised) for event in events.events)
+
+
+@pytest.mark.parametrize("association", ["check", "scenario"])
+@pytest.mark.parametrize("invalid_minimal", [False, True])
+@pytest.mark.parametrize("admitted", [False, True])
+def test_collect_keeps_admission_and_argument_error_order(
+    association, invalid_minimal, admitted
+) -> None:
+    invariant = _allowed_invariant("get-order", "association-guard")
+    check = _check(invariant, (("order_id", "victim"),))
+    observation = _observation(check)
+    mapped_check = check
+    if association == "check":
+        mapped_check = check.model_copy(update={"check_id": "foreign"})
+    else:
+        observation = observation.model_copy(update={"scenario_id": "foreign"})
+    verdict = _verdict(
+        "recorded witness",
+        evidence_refs=(observation.observation_id,),
+        status=VerdictStatus.FAIL if admitted else VerdictStatus.PASS,
+    )
+    key = observation.observation_id, invariant.invariant_id
+    execution = ExecutionResult(
+        (observation,),
+        (check,),
+        {key: ObservationProvenance(None, "path", "step", invariant.invariant_id)},
+        {key: verdict},
+        {key: None} if invalid_minimal else {},
+    )
+    if not admitted:
+        assert (
+            collect(
+                execution,
+                {invariant.invariant_id: invariant},
+                {observation.check_id: mapped_check},
+                ClassificationFacts(),
+            )
+            == ()
+        )
+        return
+
+    error = AttributeError if invalid_minimal else ValueError
+    message = (
+        "'NoneType' object has no attribute 'request'"
+        if invalid_minimal
+        else "observation does not belong to the check"
+        if association == "check"
+        else "observation scenario does not belong to the check"
+    )
+    with pytest.raises(error, match=message):
+        collect(
+            execution,
+            {invariant.invariant_id: invariant},
+            {observation.check_id: mapped_check},
+            ClassificationFacts(),
+        )

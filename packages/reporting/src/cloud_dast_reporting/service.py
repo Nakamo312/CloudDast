@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Protocol
 
+from cloud_dast.api import is_classification_deficit
 from cloud_dast.contracts.metrics import CampaignMetricsSnapshot
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
@@ -26,9 +27,6 @@ from cloud_dast.model.events import (
     FindingRaised,
 )
 from cloud_dast.model.evidence import severity_score
-from cloud_dast.verification.taxonomy import (
-    is_classification_deficit,
-)
 
 
 class _CoverageStatusView(Protocol):

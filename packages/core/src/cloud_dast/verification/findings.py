@@ -84,73 +84,6 @@ def finding_fingerprint(
     )
 
 
-def finding_from_observation(
-    check: Check,
-    observation: Observation,
-    invariant: InvariantProjection,
-    *,
-    title: str,
-    description: str,
-    remediation: str,
-    verdict: VerdictStatus | None = None,
-    goal_id: str | None = None,
-    path_id: str | None = None,
-    step_id: str | None = None,
-    rationale: str = "",
-    minimal_poc: tuple[tuple[str, JsonValue], ...] | None = None,
-    confidence: float | None = None,
-    evidence_refs: tuple[str, ...] = (),
-    policy_verdict: PolicyVerdict | None = None,
-    classification_facts: ClassificationFacts | None = None,
-) -> Finding:
-    """Build a finding only when the observation violates the invariant."""
-
-    if observation.check_id != check.check_id:
-        raise ValueError("observation does not belong to the check")
-    if observation.scenario_id != check.scenario_id:
-        raise ValueError("observation scenario does not belong to the check")
-
-    if verdict is None:
-        raise ValueError("finding requires an explicit verdict")
-    if verdict is not VerdictStatus.FAIL:
-        raise ValueError("finding requires a failed observation")
-
-    classification = DEFAULT_CATALOG.classify_finding(
-        invariant,
-        facts=classification_facts,
-        action_id=f"action:{check.method_id}",
-    )
-    fingerprint = finding_fingerprint(
-        invariant=invariant,
-        observation=observation,
-        policy_verdict=policy_verdict,
-    )
-    return Finding(
-        observation_id=observation.observation_id,
-        invariant_id=invariant.invariant_id,
-        method_id=check.method_id,
-        scenario_id=observation.scenario_id,
-        severity=invariant.severity,
-        title=title,
-        description=description,
-        remediation=remediation,
-        goal_id=goal_id,
-        path_id=path_id,
-        step_id=step_id,
-        rationale=rationale,
-        fingerprint=fingerprint,
-        minimal_poc=minimal_poc,
-        confidence=confidence,
-        evidence_refs=evidence_refs,
-        vulnerability_class=classification.vulnerability_class,
-        classification_deficits=classification.deficit_reasons,
-        cwe=classification.cwe,
-        owasp=classification.owasp,
-        stride=classification.stride,
-        norm_fact=invariant.norm_fact,
-    )
-
-
 def collect(
     execution: ExecutionResult,
     invariants: Mapping[str, InvariantProjection],
@@ -191,23 +124,45 @@ def collect(
             continue
         if norm.verdict_policy != "deterministic":
             continue
-        finding = finding_from_observation(
-            check,
-            observation,
+        minimal_poc = execution.minimal_checks.get(evaluation_key, check).request
+        if observation.check_id != check.check_id:
+            raise ValueError("observation does not belong to the check")
+        if observation.scenario_id != check.scenario_id:
+            raise ValueError("observation scenario does not belong to the check")
+
+        classification = DEFAULT_CATALOG.classify_finding(
             invariant,
+            facts=classification_facts,
+            action_id=f"action:{check.method_id}",
+        )
+        fingerprint = finding_fingerprint(
+            invariant=invariant,
+            observation=observation,
+            policy_verdict=policy_verdict,
+        )
+        finding = Finding(
+            observation_id=observation.observation_id,
+            invariant_id=invariant.invariant_id,
+            method_id=check.method_id,
+            scenario_id=observation.scenario_id,
+            severity=invariant.severity,
             title=f"Security policy violated: {invariant.invariant_id}",
             description=invariant.statement,
             remediation="Review and enforce the invariant's security policy.",
-            verdict=policy_verdict.status,
             goal_id=observation_provenance.goal_id,
             path_id=observation_provenance.path_id,
             step_id=observation_provenance.step_id,
             rationale=policy_verdict.rationale,
-            minimal_poc=execution.minimal_checks.get(evaluation_key, check).request,
+            fingerprint=fingerprint,
+            minimal_poc=minimal_poc,
             confidence=policy_verdict.confidence,
             evidence_refs=policy_verdict.evidence_refs,
-            policy_verdict=policy_verdict,
-            classification_facts=classification_facts,
+            vulnerability_class=classification.vulnerability_class,
+            classification_deficits=classification.deficit_reasons,
+            cwe=classification.cwe,
+            owasp=classification.owasp,
+            stride=classification.stride,
+            norm_fact=invariant.norm_fact,
         )
         fingerprint = finding.fingerprint
         if fingerprint is None:
@@ -259,6 +214,5 @@ __all__ = [
     "select_minimal_poc",
     "attach_finding_identity",
     "finding_fingerprint",
-    "finding_from_observation",
     "sink_ids_from_invariant",
 ]

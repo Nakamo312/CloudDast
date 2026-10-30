@@ -39,9 +39,9 @@ from cloud_dast.runtime.execution import (
 from cloud_dast.runtime.execution import view as execution_view
 from cloud_dast.verification import (
     action_runtime,
-    coverage_models,
     invariant_projection,
     norm_coverage,
+    term_coverage,
 )
 from cloud_dast.verification import findings as finding_projection
 from cloud_dast.verification.differential import contracts
@@ -711,12 +711,12 @@ def test_setup_reference_and_service_projections_are_application_owned() -> None
         assert not _module_owns_symbol(binding, symbol)
 
 
-def test_coverage_models_are_verification_owned() -> None:
-    modules = _imported_modules(Path(coverage_models.__file__))
+def test_term_coverage_are_verification_owned() -> None:
+    modules = _imported_modules(Path(term_coverage.__file__))
 
     assert not any(module.startswith("cloud_dast.workflow") for module in modules)
-    assert coverage_models.__name__ == "cloud_dast.verification.coverage_models"
-    assert not (SOURCE_ROOT / "application/verification/coverage_models.py").exists()
+    assert term_coverage.__name__ == "cloud_dast.verification.term_coverage"
+    assert not (SOURCE_ROOT / "application/verification/term_coverage.py").exists()
 
 
 def test_norm_coverage_read_model_is_verification_owned() -> None:
@@ -771,14 +771,15 @@ def test_payload_corpus_implementation_is_fuzzing_owned() -> None:
 
 
 def test_witness_signals_are_core_owned_and_history_uses_the_public_contract() -> None:
-    from cloud_dast.verification.witness import WitnessSignal, extract_witness_signals
+    from cloud_dast.api import Signal, extract_witness_signals
     from cloud_dast_fuzzing import history
 
-    assert WitnessSignal.__module__ == "cloud_dast.verification.witness"
+    assert Signal.__module__ == "cloud_dast.contracts.feedback"
     assert extract_witness_signals.__module__ == "cloud_dast.verification.witness"
     history_modules = _imported_modules(Path(history.__file__))
     assert "cloud_dast.verification.oracles" not in history_modules
-    assert "cloud_dast.verification.witness" in history_modules
+    assert "cloud_dast.verification.witness" not in history_modules
+    assert "cloud_dast.api" in history_modules
     legacy_witness = SOURCE_ROOT / "application/verification/oracles/witness.py"
     assert not legacy_witness.exists()
 
@@ -1665,17 +1666,39 @@ def test_public_contracts_import_without_runtime_or_verification() -> None:
 import sys
 from typing import get_type_hints
 sys.path[:0] = {sys.path!r}
-from cloud_dast import api
+from cloud_dast.contracts.execution import LiveRequest, LiveResult, ScenarioBinding
+from cloud_dast.contracts.plan import QdlExecutionStep, QdlExecutionPath, QdlExecutionView
+from cloud_dast.contracts.feedback import Signal
 from cloud_dast.contracts.assessment import CoverageMatrix, NormCoverageRow
 from cloud_dast.contracts.plan import InvariantProjection
-for contract in (api.LiveRequest, api.LiveResult, api.ScenarioBinding,
-                 api.QdlExecutionStep, api.QdlExecutionPath, api.QdlExecutionView,
+for contract in (LiveRequest, LiveResult, ScenarioBinding,
+                 QdlExecutionStep, QdlExecutionPath, QdlExecutionView, Signal,
                  CoverageMatrix, NormCoverageRow, InvariantProjection):
     get_type_hints(contract)
 assert not any(name == prefix or name.startswith(prefix + ".")
                for name in sys.modules
                for prefix in ("cloud_dast.runtime", "cloud_dast.verification",
                               "cloud_dast.infrastructure", "cloud_dast.composition"))
+from cloud_dast import api
+from cloud_dast.verification.witness import extract_witness_signals
+assert api.Signal is Signal
+assert api.extract_witness_signals is extract_witness_signals
+from cloud_dast.verification.norms import NormCompiler, NormView
+from cloud_dast.verification.slices import build_slice
+from cloud_dast.verification.evidence import build_execution_feedback_view
+assert api.NormCompiler is NormCompiler
+assert api.NormView is NormView
+assert api.build_slice is build_slice
+assert api.build_execution_feedback_view is build_execution_feedback_view
+from cloud_dast.verification.taxonomy.catalog import DEFAULT_CATALOG, is_classification_deficit
+from cloud_dast.verification.evidence_facts import verified_fact_id
+assert api.DEFAULT_CATALOG is DEFAULT_CATALOG
+assert api.is_classification_deficit is is_classification_deficit
+assert api.verified_fact_id is verified_fact_id
+assert not any(name == prefix or name.startswith(prefix + ".")
+               for name in sys.modules
+               for prefix in ("cloud_dast.runtime", "cloud_dast.infrastructure",
+                              "cloud_dast.composition"))
 """
     result = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, timeout=30

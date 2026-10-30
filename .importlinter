@@ -1,5 +1,11 @@
 [importlinter]
-root_package = cloud_dast
+root_packages =
+    cloud_dast
+    cloud_dast_symbolic
+    cloud_dast_fuzzing
+    cloud_dast_llm
+    cloud_dast_automata
+    cloud_dast_reporting
 include_external_packages = false
 
 [importlinter:contract:runtime-no-outer-layers]
@@ -202,7 +208,7 @@ forbidden_modules =
 
 
 [importlinter:contract:public-api-no-implementation]
-name = Public API contracts must not depend on runtime or verification implementations
+name = Public API exposes only approved pure verification entry points
 type = forbidden
 source_modules = cloud_dast.api
 forbidden_modules =
@@ -210,6 +216,14 @@ forbidden_modules =
     cloud_dast.verification
     cloud_dast.infrastructure
     cloud_dast.composition
+
+ignore_imports =
+    cloud_dast.api -> cloud_dast.verification.norms
+    cloud_dast.api -> cloud_dast.verification.slices
+    cloud_dast.api -> cloud_dast.verification.evidence
+    cloud_dast.api -> cloud_dast.verification.witness
+    cloud_dast.api -> cloud_dast.verification.taxonomy.catalog
+    cloud_dast.api -> cloud_dast.verification.evidence_facts
 
 
 [importlinter:contract:scheduler-state-no-policy-coordination]
@@ -309,3 +323,25 @@ forbidden_modules =
     cloud_dast.runtime.execution.runner
     cloud_dast.runtime.execution.assembly
     cloud_dast.runtime.campaign.runtime
+
+
+[importlinter:contract:public-api-no-outer-transitively]
+name = Public API remains free of runtime and outer layers on every import path
+type = forbidden
+source_modules = cloud_dast.api
+forbidden_modules =
+    cloud_dast.runtime
+    cloud_dast.infrastructure
+    cloud_dast.composition
+
+[importlinter:contract:optional-no-direct-verification]
+name = Optional extensions consume verification through the public API
+type = forbidden
+source_modules =
+    cloud_dast_symbolic
+    cloud_dast_fuzzing
+    cloud_dast_llm
+    cloud_dast_automata
+    cloud_dast_reporting
+forbidden_modules = cloud_dast.verification
+allow_indirect_imports = true

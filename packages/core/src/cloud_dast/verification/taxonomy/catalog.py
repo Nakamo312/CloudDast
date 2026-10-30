@@ -68,37 +68,33 @@ class ClassificationFacts:
         for fact in graph.facts:
             if fact.context not in {Context.CONTRACT, Context.ACCEPTED}:
                 continue
-            if fact.predicate.name == "has" and len(fact.args) == 2:
-                holder, role = fact.args
-                role_name = atom_value(role)
-                if role_name not in SEMANTIC_ROLE_NAMES or not isinstance(
-                    holder, Struct
+            match fact.predicate.name, fact.args:
+                case "has", (
+                    Struct(
+                        name=("input_field" | "output_field" | "field") as kind,
+                        args=(entity, path),
+                    ),
+                    role,
                 ):
-                    continue
-                if holder.name == "input_field" and len(holder.args) == 2:
-                    action = atom_value(holder.args[0])
-                    field_name = atom_value(holder.args[1])
-                    if action is not None and field_name is not None:
-                        for alias in action_aliases(action):
-                            input_roles.add((alias, field_name, role_name))
-                elif holder.name == "output_field" and len(holder.args) == 2:
-                    action = atom_value(holder.args[0])
-                    field_name = atom_value(holder.args[1])
-                    if action is not None and field_name is not None:
-                        for alias in action_aliases(action):
-                            witness_roles.add((alias, field_name, role_name))
-                elif holder.name == "field" and len(holder.args) == 2:
-                    resource = atom_value(holder.args[0])
-                    field_name = atom_value(holder.args[1])
-                    if resource is not None and field_name is not None:
-                        witness_roles.add((resource, field_name, role_name))
-            elif fact.predicate.name == "is" and len(fact.args) == 2:
-                identifier, kind = fact.args
-                identifier_value = atom_value(identifier)
-                kind_value = atom_value(kind)
-                if identifier_value is None or kind_value is None:
-                    continue
-                sink_types.add((identifier_value, kind_value))
+                    role_name = atom_value(role)
+                    identifier = atom_value(entity)
+                    field_name = atom_value(path)
+                    if (
+                        role_name not in SEMANTIC_ROLE_NAMES
+                        or identifier is None
+                        or field_name is None
+                    ):
+                        continue
+                    roles = input_roles if kind == "input_field" else witness_roles
+                    aliases = (
+                        (identifier,) if kind == "field" else action_aliases(identifier)
+                    )
+                    roles.update((alias, field_name, role_name) for alias in aliases)
+                case "is", (identifier, type_term):
+                    identifier_value = atom_value(identifier)
+                    kind_value = atom_value(type_term)
+                    if identifier_value is not None and kind_value is not None:
+                        sink_types.add((identifier_value, kind_value))
 
         return cls(
             input_roles=frozenset(input_roles),
@@ -411,7 +407,7 @@ class ClassCatalog:
             candidates = tuple(
                 entry
                 for entry in candidates
-                if entry in defaulted or _has_fact_constraint(entry, norm.effect_name)
+                if entry in defaulted or _select_constraints(entry, norm.effect_name)
             )
         matching: list[ClassEntry] = []
         for entry in candidates:
@@ -420,7 +416,7 @@ class ClassCatalog:
         if not matching:
             return None
         constrained = [
-            entry for entry in matching if _has_fact_constraint(entry, norm.effect_name)
+            entry for entry in matching if _select_constraints(entry, norm.effect_name)
         ]
         # Fact-constrained matches win; class ID breaks ties deterministically.
         return min(constrained or matching, key=lambda entry: entry.class_id)
@@ -435,7 +431,7 @@ def _entry_matches(
     if (
         entry.default_effects
         and norm.effect_name not in entry.default_effects
-        and not _has_fact_constraint(entry, norm.effect_name)
+        and not _select_constraints(entry, norm.effect_name)
     ):
         return False
     return not _collect_entry_residuals(entry, norm, facts, action_id)
@@ -454,39 +450,29 @@ def _collect_entry_residuals(
     Matching and deficit diagnostics use the same residual algebra.
     """
 
-    residuals: list[str] = []
-    if entry.input_roles and norm.effect_name == "changed":
-        field_name = norm.forbidden_field
-        roles = (
-            facts.input_roles_for(action_id, field_name)
-            if field_name is not None
-            else frozenset()
-        )
-        if not roles.intersection(entry.input_roles):
-            residuals.append("missing_input_role")
-    if entry.input_roles and norm.effect_name == "allowed":
+    constraints = _select_constraints(entry, norm.effect_name)
+    if not constraints:
+        return ()
+    roles = frozenset()
+    if norm.effect_name == "changed" and norm.forbidden_field is not None:
+        roles = facts.input_roles_for(action_id, norm.forbidden_field)
+    elif norm.effect_name == "allowed":
         roles = facts.input_roles_for_action(action_id)
-        if not roles.intersection(entry.input_roles):
-            residuals.append("missing_input_role")
-    if entry.witness_roles and norm.effect_name == "has":
-        field_name = norm.forbidden_field
-        resource_id = norm.resource_id
-        roles = (
-            facts.witness_roles_for(action_id, resource_id, field_name)
-            if field_name is not None and resource_id is not None
-            else frozenset()
+    elif (
+        norm.effect_name == "has"
+        and norm.forbidden_field is not None
+        and norm.resource_id is not None
+    ):
+        roles = facts.witness_roles_for(
+            action_id, norm.resource_id, norm.forbidden_field
         )
-        if not roles.intersection(entry.witness_roles):
-            residuals.append("missing_witness_role")
-    if entry.sink_types and norm.effect_name == "reached":
-        sink_id = norm.marker
+    elif norm.effect_name == "reached" and norm.marker is not None:
         # The class rule joins the norm effect to the QDL sink type.  The
         # sink identifier itself is never part of the classification key.
-        if sink_id is None or not facts.sink_types_for(sink_id).intersection(
-            entry.sink_types
-        ):
-            residuals.append("missing_sink_type")
-    return tuple(residuals)
+        roles = facts.sink_types_for(norm.marker)
+    if roles.intersection(constraints):
+        return ()
+    return (_FACT_CONSTRAINTS[norm.effect_name][1],)
 
 
 def _collect_classification_deficits(
@@ -562,12 +548,17 @@ def _effect_action(norm: NormView, action_id: str | None) -> str | None:
     return action_id
 
 
-def _has_fact_constraint(entry: ClassEntry, effect_name: str) -> bool:
-    if effect_name in {"allowed", "changed"} and entry.input_roles:
-        return True
-    if effect_name == "has" and entry.witness_roles:
-        return True
-    return effect_name == "reached" and bool(entry.sink_types)
+_FACT_CONSTRAINTS = {
+    "changed": ("input_roles", "missing_input_role"),
+    "allowed": ("input_roles", "missing_input_role"),
+    "has": ("witness_roles", "missing_witness_role"),
+    "reached": ("sink_types", "missing_sink_type"),
+}
+
+
+def _select_constraints(entry: ClassEntry, effect_name: str) -> tuple[str, ...]:
+    policy = _FACT_CONSTRAINTS.get(effect_name)
+    return getattr(entry, policy[0]) if policy is not None else ()
 
 
 DEFAULT_CATALOG = ClassCatalog()

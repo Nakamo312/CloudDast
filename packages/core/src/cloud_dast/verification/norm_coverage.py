@@ -39,8 +39,8 @@ from cloud_dast.model.events import (
     QdlStepEvaluated,
 )
 from cloud_dast.qdl.graph import Struct, canonical_json
-from cloud_dast.verification.coverage_models import evaluate_term_coverage
 from cloud_dast.verification.norms import EFFECT_PRIMITIVES
+from cloud_dast.verification.term_coverage import evaluate_term_coverage
 
 _GENERIC_STEP_REASONS = frozenset({"QDL step evaluated", "QDL chain step evaluated"})
 _GENERIC_PATH_REASONS = frozenset(

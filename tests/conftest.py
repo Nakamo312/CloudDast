@@ -18,11 +18,10 @@ from cloud_dast.model import (
     ScopeRelation,
     Severity,
     StandState,
-    VerdictStatus,
 )
 from cloud_dast.qdl.graph import Atom, Context, Fact, Predicate, allowed
 from cloud_dast.verification.findings import (
-    finding_from_observation,
+    finding_fingerprint,
 )
 
 
@@ -168,11 +167,23 @@ def finding(
     allowed_observation: Observation,
     invariant: InvariantProjection,
 ) -> Finding:
-    return finding_from_observation(
-        check,
-        allowed_observation,
-        invariant,
-        verdict=VerdictStatus.FAIL,
+    return Finding(
+        observation_id=allowed_observation.observation_id,
+        invariant_id=invariant.invariant_id,
+        method_id=check.method_id,
+        scenario_id=allowed_observation.scenario_id,
+        severity=invariant.severity,
+        fingerprint=finding_fingerprint(
+            invariant=invariant,
+            observation=allowed_observation,
+            policy_verdict=None,
+        ),
+        norm_fact=invariant.norm_fact,
+        vulnerability_class="function_level_authz",
+        classification_deficits=(),
+        cwe=("CWE-285", "CWE-284"),
+        owasp=("API5",),
+        stride=("E",),
         title="Cross-folder Lockbox secret access",
         description="Attacker read a secret from another folder",
         remediation="Restrict folder-level role assignment",

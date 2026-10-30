@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from uuid import uuid4
 
+from cloud_dast.api import NormView
 from cloud_dast.candidates import (
     apply_seed_hints,
     resolve_resource_ref,
@@ -26,7 +27,6 @@ from cloud_dast.model import (
     ScenarioPosition,
 )
 from cloud_dast.ports import OobUrlFactory
-from cloud_dast.verification.norms import NormView
 
 RUNTIME_PLACEHOLDERS = (PROBE_MARKER_PLACEHOLDER, OOB_URL_PLACEHOLDER)
 _STRUCTURED_GENERATORS = frozenset({"grammar", "textual"})

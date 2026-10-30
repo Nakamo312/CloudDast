@@ -4,48 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
 
+from cloud_dast.contracts import feedback
 from cloud_dast.model import JsonValue, Observation
 
 _INCOMPLETE_RESPONSE_PATHS = frozenset({"__truncated__", "not_available"})
-
-type WitnessSignalKind = Literal[
-    "marker_echo",
-    "latency_delta",
-    "oob_callback",
-    "content_delta",
-    "known_content",
-]
-
-
-@dataclass(frozen=True, slots=True)
-class WitnessSignal:
-    """One class-free runtime signal with explicit evidence lineage."""
-
-    kind: WitnessSignalKind
-    action_id: str | None
-    evidence_refs: tuple[str, ...]
-    paths: tuple[str, ...] = ()
-    marker: str | None = None
-    delta_ms: float | None = None
-    content: str | None = None
-
-    def __post_init__(self) -> None:
-        if not self.evidence_refs:
-            raise ValueError("witness signal must reference observation evidence")
-
-    @property
-    def signature(self) -> str:
-        """Identify a deficit by kind and its paths, timing delta or marker."""
-
-        if self.delta_ms is not None:
-            return f"{self.kind}:{self.delta_ms}"
-        if self.paths:
-            return f"{self.kind}:{','.join(self.paths)}"
-        if self.marker is not None:
-            return f"{self.kind}:{self.marker}"
-        return self.kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,13 +48,13 @@ def extract_witness_signals(
     sink_types: dict[str, str] | None = None,
     known_content: KnownContentWitness | None = None,
     oob_events: Sequence[object] = (),
-) -> tuple[WitnessSignal, ...]:
+) -> tuple[feedback.Signal, ...]:
     """Extract bounded evidence signals without classifying a vulnerability."""
 
     if not trace:
         return ()
     action_id = _action_id(method_id)
-    signals: set[WitnessSignal] = set()
+    signals: set[feedback.Signal] = set()
     for observation in trace:
         marker_signal = _marker_signal(
             observation,
@@ -110,7 +73,7 @@ def extract_witness_signals(
             )
             if paths:
                 signals.add(
-                    WitnessSignal(
+                    feedback.Signal(
                         kind="known_content",
                         action_id=action_id,
                         evidence_refs=(observation.observation_id,),
@@ -129,7 +92,7 @@ def extract_witness_signals(
         if event is None:
             continue
         signals.add(
-            WitnessSignal(
+            feedback.Signal(
                 kind="oob_callback",
                 action_id=action_id,
                 evidence_refs=(
@@ -144,7 +107,7 @@ def extract_witness_signals(
     if len(trace) >= 2:
         if control.duration_ms is not None and treatment.duration_ms is not None:
             signals.add(
-                WitnessSignal(
+                feedback.Signal(
                     kind="latency_delta",
                     action_id=action_id,
                     evidence_refs=(
@@ -157,7 +120,7 @@ def extract_witness_signals(
         paths = content_delta_paths(control, treatment)
         if paths:
             signals.add(
-                WitnessSignal(
+                feedback.Signal(
                     kind="content_delta",
                     action_id=action_id,
                     evidence_refs=(
@@ -326,7 +289,7 @@ def _marker_signal(
     *,
     probe_fields: tuple[str, ...],
     sink_types: dict[str, str] | None,
-) -> WitnessSignal | None:
+) -> feedback.Signal | None:
     marker = observation.probe_marker
     if not marker:
         return None
@@ -343,7 +306,7 @@ def _marker_signal(
     error_channel = marker in (observation.response_summary, observation.error_reason)
     if not paths and not error_channel:
         return None
-    return WitnessSignal(
+    return feedback.Signal(
         kind="marker_echo",
         action_id=action_id,
         evidence_refs=(observation.observation_id,),
@@ -356,7 +319,6 @@ __all__ = [
     "KnownContentWitness",
     "ObservationPair",
     "PathWitness",
-    "WitnessSignal",
     "content_delta_paths",
     "extract_witness_signals",
     "grounded_sink_fields",

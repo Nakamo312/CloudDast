@@ -7,6 +7,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from cloud_dast.api import Signal, extract_witness_signals
 from cloud_dast.contracts.feedback import ExecutionFeedback
 from cloud_dast.contracts.plan import InvariantProjection, VerificationPlan
 from cloud_dast.extensions import SaturatedHistory as SaturatedHistoryContract
@@ -26,7 +27,6 @@ from cloud_dast.qdl.graph import (
     QdlGraph,
     Struct,
 )
-from cloud_dast.verification.witness import WitnessSignal, extract_witness_signals
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +67,7 @@ class SaturatedHistory(SaturatedHistoryContract):
     dialects: tuple[tuple[str, str], ...]
     schema: tuple[FieldSpec, ...]
     candidates: tuple[SaturatedCandidate, ...]
-    witness_signals: tuple[WitnessSignal, ...]
+    witness_signals: tuple[Signal, ...]
     diff_pairs: tuple[SaturatedDiffPair, ...]
     source_graph: QdlGraph
 

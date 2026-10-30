@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from cloud_dast.api import extract_witness_signals
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
@@ -29,7 +30,6 @@ from cloud_dast.verification.oracles import (
     ObservationPair,
     PrimitiveOracleRouter,
     WitnessSignalOracle,
-    extract_witness_signals,
 )
 from cloud_dast.verification.oracles import oob as verification_oob
 

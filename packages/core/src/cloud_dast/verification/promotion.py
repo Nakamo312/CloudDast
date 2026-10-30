@@ -606,14 +606,11 @@ def promote_proposal(
             continue
         graph = _validate_norm(
             facts[0],
-            source=request.source,
-            proposal=request.proposal,
+            request=request,
             source_actions=source_actions,
             declarations=declarations,
             compiler=compiler,
-            duration_thresholds=request.duration_thresholds,
             supported_effects=supported_effects,
-            evidence_fields=request.evidence_fields,
         )
         if graph is None:
             invalid_norms.append(norm_id)
@@ -660,15 +657,11 @@ def promote_proposal(
         parked,
         semantic_issues,
     ) = _promote_semantic_facts(
-        request.source,
-        request.proposal,
+        request,
         declarations,
         source_actions,
         max_semantic_facts=max_semantic_facts,
-        evidence_fields=request.evidence_fields,
         evidence_refs=evidence_refs,
-        approved_classifications=request.approved_classifications,
-        runtime_evidence_exempt_predicates=request.runtime_evidence_exempt_predicates,
         classification_context=classification_context,
     )
     promotion_issues.extend(semantic_issues)
@@ -897,16 +890,12 @@ def _source_sink_grammar(
 
 
 def _promote_semantic_facts(
-    source: QdlGraph,
-    proposal: QdlGraph,
+    request: ProposalPromotionRequest,
     declarations: dict[str, Fact],
     source_actions: frozenset[str],
     *,
     max_semantic_facts: int,
-    evidence_fields: frozenset[str] | None = None,
     evidence_refs: frozenset[str] = frozenset(),
-    approved_classifications: frozenset[str] = frozenset(),
-    runtime_evidence_exempt_predicates: frozenset[str] = frozenset(),
     classification_context: ClassificationPromotionContext | None = None,
 ) -> tuple[QdlGraph | None, int, QdlGraph | None, tuple[ValidationIssue, ...]]:
     """Promote validated semantic grounding facts into the accepted context.
@@ -946,22 +935,22 @@ def _promote_semantic_facts(
 
     rejected_semantic_facts = 0
     overflow = False
-    for fact in proposal.facts:
+    for fact in request.proposal.facts:
         if fact.context is not Context.PROPOSAL:
             continue
         if fact.predicate.name == "prevents":
             continue
         classification_anchored = _classification_fact_is_anchored(
             fact,
-            source,
+            request.source,
             classification_context,
             source_actions,
         )
         classification_untrusted = _classification_lacks_provenance(
-            source,
+            request.source,
             fact,
-            evidence_fields,
-            approved_classifications,
+            request.evidence_fields,
+            request.approved_classifications,
         )
         is_sink_classification = (
             fact.predicate.name == "is"
@@ -987,7 +976,7 @@ def _promote_semantic_facts(
             if classification_untrusted or (
                 is_sink_classification
                 and classification_anchored
-                and _sink_type_declaration_lacks_provenance(source, fact)
+                and _sink_type_declaration_lacks_provenance(request.source, fact)
             ):
                 rejection = (
                     "classification_parked",
@@ -1021,14 +1010,14 @@ def _promote_semantic_facts(
             )
             continue
         if not classification_anchored and not _semantic_fact_is_promotable(
-            source,
-            proposal,
+            request.source,
+            request.proposal,
             fact,
             source_actions,
-            evidence_fields,
+            request.evidence_fields,
             evidence_refs,
-            approved_classifications,
-            runtime_evidence_exempt_predicates,
+            request.approved_classifications,
+            request.runtime_evidence_exempt_predicates,
         ):
             issues.append(
                 ValidationIssue(
@@ -1095,11 +1084,15 @@ def _promote_semantic_facts(
             add(declaration)
         add(fact)
 
-    review_declarations = _declarations(source, proposal, include_untrusted=True)
+    review_declarations = _declarations(
+        request.source, request.proposal, include_untrusted=True
+    )
     parked = _parked_classifications_graph(
         parked_facts,
         review_declarations,
-        _lead_norm_bundles(source, proposal, parked_facts, review_declarations),
+        _lead_norm_bundles(
+            request.source, request.proposal, parked_facts, review_declarations
+        ),
     )
     result = filter_declaration_closure(facts, issues=issues)
     if not facts:
@@ -1241,14 +1234,11 @@ def _parked_policy_norm_graph(
 def _validate_norm(
     fact: Fact,
     *,
-    source: QdlGraph,
-    proposal: QdlGraph,
+    request: ProposalPromotionRequest,
     source_actions: frozenset[str],
     declarations: dict[str, Fact],
     compiler: NormCompiler,
-    duration_thresholds: Mapping[str, int] | None,
     supported_effects: frozenset[str],
-    evidence_fields: frozenset[str] | None = None,
 ) -> QdlGraph | None:
     accepted_fact = fact.model_copy(update={"context": Context.ACCEPTED})
     try:
@@ -1266,8 +1256,8 @@ def _validate_norm(
     if view.effect.name == "duration":
         calibrated = _calibrated_duration_effect(
             view.effect,
-            source,
-            duration_thresholds or {},
+            request.source,
+            request.duration_thresholds or {},
         )
         if calibrated is None:
             return None
@@ -1280,11 +1270,11 @@ def _validate_norm(
     else:
         effect = view.effect
         actions = _semantic_effect_actions(
-            source,
-            proposal,
+            request.source,
+            request.proposal,
             effect,
             source_actions,
-            evidence_fields,
+            request.evidence_fields,
         )
     if not actions:
         return None

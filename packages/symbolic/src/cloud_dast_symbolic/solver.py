@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import z3
 
+from cloud_dast.api import NormCompiler
 from cloud_dast.binding import validate_binding
 from cloud_dast.contracts.feedback import ExecutionFeedback
 from cloud_dast.contracts.plan import InvariantProjection, VerificationPlan
@@ -33,7 +34,6 @@ from cloud_dast.model.schemas import (
     is_integer_type,
 )
 from cloud_dast.qdl.graph_ops import atom_value
-from cloud_dast.verification.norms import NormCompiler
 
 
 @dataclass(frozen=True, slots=True)

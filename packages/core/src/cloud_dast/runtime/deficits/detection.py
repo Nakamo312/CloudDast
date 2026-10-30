@@ -30,6 +30,7 @@ import logging
 from collections.abc import Iterable
 
 from cloud_dast.contracts.execution import ScenarioBinding
+from cloud_dast.contracts.feedback import Signal
 from cloud_dast.contracts.plan import QdlExecutionPath, QdlExecutionStep
 from cloud_dast.model import (
     AccessOutcome,
@@ -74,7 +75,6 @@ from cloud_dast.runtime.deficits.routing import (
     deduplicate,
 )
 from cloud_dast.verification.differential.report import DiffReport
-from cloud_dast.verification.witness import WitnessSignal
 
 logger = logging.getLogger("cloud_dast.runtime.deficits")
 
@@ -332,7 +332,7 @@ def variance_deficit(report: DiffReport) -> Deficit:
 
 
 def signal_deficits(
-    signals: Iterable[WitnessSignal],
+    signals: Iterable[Signal],
     graph: object | None = None,
 ) -> tuple[Deficit, ...]:
     """Return reactive deficits for signals without a complete QDL mapping.

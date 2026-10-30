@@ -45,8 +45,28 @@ unrepresentable metadata raises ValueError. QDL truth and finding gates remain.
 Manual EvidenceView without budget metadata retains prior uncapped behavior;
 its Mapping is readonly by contract, not deeply immutable. No production mutation
 was found. Splitty is installed; active routing and model calls were not tested.
+The authorization covers captured data passed to the configured internal models.
+It does not change what counts as evidence of a target vulnerability: QDL field
+roles and target response-redaction semantics still participate in verification.
 
 ## API consolidation
+
+Optional packages consume verification capabilities through `cloud_dast.api`.
+Exports reference canonical objects; they add no wrappers or duplicate models.
+Signal and SignalKind belong to the runtime-neutral feedback contract, while
+signal extraction remains in verification. The import contracts cover all five
+optional packages and reject direct imports of verification internals. Six
+explicit pure entry points are allowed into the API, with a separate transitive
+ban on runtime, infrastructure and composition, without exceptions. Importing
+the API currently loads 28 verification modules through existing barrels and
+reads the local taxonomy YAML; this import cost remains a limitation.
+
+Finding construction belongs to `collect`. Its former 16-argument factory had
+one production caller and has been removed. Tests exercise the collector,
+canonical Finding and ClassCatalog directly. The minimal-PoC read still precedes
+association errors, and finding admission and merge ordering are preserved.
+This removes 46 production lines; collect grows from 68 to 90 lines and its
+complexity from 16 to 18, an explicit tradeoff for removing the redundant API.
 
 Promotion accepts the existing ProposalPromotionRequest and separate campaign
 caps. Runtime no longer unpacks the request into eleven scalar arguments.
@@ -85,32 +105,32 @@ changes manufacture the reduction. Nonblank counts exclude comments, not docstri
 
 | Scope | Baseline | Current | Delta |
 |---|---:|---:|---:|
-| All production, physical LOC | 85,620 | 84,559 | −1,061 |
-| All production, nonblank/noncomment LOC | 74,144 | 73,248 | −896 |
-| All production functions | 3,345 | 3,306 | −39 |
+| All production, physical LOC | 85,620 | 84,515 | −1,105 |
+| All production, nonblank/noncomment LOC | 74,144 | 73,206 | −938 |
+| All production functions | 3,345 | 3,305 | −40 |
 | All production classes | 733 | 727 | −6 |
-| Tests, physical LOC | 105,280 | 106,526 | +1,246 |
-| Tests, nonblank/noncomment LOC | 90,285 | 91,430 | +1,145 |
+| Tests, physical LOC | 105,280 | 106,448 | +1,168 |
+| Tests, nonblank/noncomment LOC | 90,285 | 91,366 | +1,081 |
 | Verification modules | 47 | 40 | −7 |
-| Verification physical LOC | 16,491 | 15,078 | −1,413 |
-| Verification functions | 563 | 506 | −57 |
-| Verification classes | 79 | 67 | −12 |
-| Verification structural findings | 89 | 69 | −20 |
+| Verification physical LOC | 16,491 | 14,971 | −1,520 |
+| Verification functions | 563 | 503 | −60 |
+| Verification classes | 79 | 66 | −13 |
+| Verification structural findings | 89 | 63 | −26 |
 
-All-production cyclomatic-complexity sum decreases by 152; maximum decreases
+All-production cyclomatic-complexity sum decreases by 178; maximum decreases
 from 48 to 38. These are intermediate measurements, not completion criteria.
 
 ## Verification evidence
 
 The current integrated suite covers verification formal/oracle/catalog cases,
 verification, architecture, execution workflow and review C3/L1 tests:
-**2,658 passed, one skipped, two inherited failures** in 81.29 seconds. Both failed
+**2,666 passed, one skipped, two inherited failures** in 81.31 seconds. Both failed
 nodes are in test_path_runner_fuzzing.py: grammar-generator feedback and finding
 shrink/replay. Both raise the previously recorded Hypothesis `many.more`
 AttributeError. This does not claim the whole repository suite is green.
 Two changed benchmark modules remain unrun because benchmarks.nsfy_bench is absent.
 
-Ruff across packages/tests passes. All 27 import contracts pass. Changed sources
+Ruff across packages/tests passes. All 29 import contracts pass. Changed sources
 pass formatting and diff checks; an unrelated baseline automata format issue is
 not silently attributed to this batch.
 
@@ -140,7 +160,7 @@ a module; global acceptance remains incomplete.
 | `action_runtime.py` | changed_independent_review_pending | Pure event-derived ledger stays verification; explicit bound/planned/recovery semantics retained. Shared _step_actions removes two copies; removed _term_key wrapper, stable min selects deficit, nullable Check fallback simplified.163→154LOC, buildCC20→17,62tests+2058old/newcomparisons pass, no new tests/types. declared_actions and three production consumers retained. |
 | `contract_projection.py` | independently_reviewed_further_disposition_pending | Keep source-schema adapter in verification, no I/O. Four scalar calls use one ordered loop; numeric min/max duplicate emission now shares existing _emit_scalar with Atom-preserving canonicalization. -31 physical LOC, no new entity. 729 complete graph/report old-new comparisons equal; 43 broader tests and16 projector tests pass. Canary suppressing minimum caught by2 tests. Independent review: 152 malformed public inputs and729 raw pre-sort emission-order comparisons unchanged; bodies outside emitters/signatures/provenance unchanged. After5614d10: one edge-spec table owns labels/predicate/direction, special term construction preserved;32448 raw returns/errors equal,CC20→12,-19LOC. Unknown-label report folding preserves600raw facts/issues sequences with positive/empty/dualunknown coverage; emit_annotation105→96lines/CC13→12,-9LOC.46consumer tests pass; inversion canarygoldenfails; independentreview pending. Independent15symbolic predicate/direction references and guard checks agree; all15specs verified; source-selection/parser ASTunchanged, edge/annotation diagnostic order preserved. |
 | `coverage.py` | independently_reviewed_remaining_work | One Builder owns graph/plan coverage; removed forwarding build_graph and module build_matrix, callers directly Builder.build. Preserve typeguard/hashguard/profiles and allbinding snapshotinputs. Newwrappercut-29productionLOC;331before/aftertests,512forward/errorcomparisons and independentreview accepted. Prior sharedfield/effectmaterialization-95LOC,constant-ownercleanup-10LOC; imports57 stillover40. Longmethods/signatures and structure remain; derivinginvariantsfromgraph losesboundeventkey, so kwargs not replaced by a bag. |
-| `coverage_models.py` | changed_final_module_disposition_pending | Keep evaluator: required=False first, then semantic/setup/channel/primitive/runtime. Name is misleading mixed ownership; no rename-only batch. Do not remove evidence_target schema merely for lacking a production factory call. _reference clone does not justify universal helper; role/reference schema boundaries remain distinct. Removed compatibility exposure-constant alias/import; four builder-only query variables movedtoactualconsumer. Coveragealgebra, typed deficit priority, schema/factfactory and publicexports unchanged. Two-filecleanup -10productionLOC,62before/aftertests, canonicalexposureconstantobjectidentity and4queryvariablevalues preserved. |
+| `coverage_models.py` | accepted_renamed | Renamed to term_coverage.py: evaluator/algebra plus exact-term evidence schema/factory belong to verification, canonical assessment models remain contracts.assessment. Net LOC0; no facade. Independent semantic acceptance plus 146 tests before/after, byte-identical renamed owner, 2 production/3 test consumers, cold imports/Ruff/format pass. |
 | `differential/__init__.py` | reviewed_validation_pending | Keep existing exports pending consumer migration; do not add a new facade. No substantive reduction by import moves. |
 | `differential/comparator.py` | reviewed_validation_pending | Keep timing/concurrency distinct. Exact incomplete-response clone belongs to Kepler shared witness kernel; comparator becomes consumer only after parent agrees kernel. Preserve mixed tree/legacy comparisons; shape uses authoritative tree but value union includes legacy. |
 | `differential/contracts.py` | reviewed_validation_pending | Keep experiment-specific models in verification; do not move wholesale to model or public contracts. _payload_fields_from_baseline is live and behavior-sensitive: deleting its string-field fallback changes readback mutation. Stateless stand policy checks marker only, not isolation guarantee. _profile_factors duplicates ordered factor names with value tuple; bounded getattr comparison could remove ~12-20 LOC, secondary only. |
@@ -149,9 +169,9 @@ a module; global acceptance remains incomplete.
 | `differential/report.py` | accepted_unchanged | Accepted unchanged: paired/aggregate measurement contract, distinct from Observation and presentation reporting. Comparator/timing/concurrency and current evidence consumer tested. Signature remains a coarse identity: different control-only fields may collide; persisted-revision uniqueness is not established here. |
 | `evaluation.py` | reviewed_changes_pending | Consumes read-only evidence view; no own mutable campaign store. Any step/request types obscure existing QdlExecutionStep/LiveRequest contracts; narrow to existing types. Repeated norm compilation and linear readback search need measured shared seam, not new DTOs. |
 | `evidence.py` | independently_reviewed_final_module_acceptance_pending | User-authorized full bounded model context: mandatory masks/role-release params/metadata/logger removed; one representation and detached JSON dump with rendered digest. Keep min1024, UTF8/leaf/string/latest-attempt caps, original digest and explicit malformed budget errors. Worker: retention pin old1fail/new1pass;348focused/2597broad pass;135 boundary cases. Batch-252 production physical/-228 nonblank, tests-100physical. QDL roles and admission/findings unchanged; two benchmark modules unavailable (missing benchmarks.nsfy_bench). Independent review accepts:72adversarial cases strictUTF8 caps,216idempotent reconstructions,10malformed metadata cases rejected, nestedcopies/digests correct,25helper ASTunchanged. Manual views without budget keep prior uncapped behavior; Mapping is readonly by contract, no production mutation found. |
-| `evidence_facts.py` | reviewed_changes_pending | Constructors do not persist or verify by themselves. supports_dataflows is a pure declared-intent gate, not evidence proof; name/document at consumer rather than invent repository. Keep runtime context filter for verified IDs. |
+| `evidence_facts.py` | accepted_unchanged | Constructors do not persist or verify by themselves. supports_dataflows is a pure declared-intent gate, not evidence proof; name/document at consumer rather than invent repository. Keep runtime context filter for verified IDs. Independent support-module acceptance: 145 targeted tests including 100 dataflow admission combinations; 64 factor combinations and factory error order. supports_dataflows declares consultation context, not proved effect or verdict. Canonical fact factories/readers retained. |
 | `finding_evaluator.py` | moved_pending_final_validation | Stateful publication/replay owner moved to runtime/campaign/evaluation.py using the shared EventProjection; pure decision/merge functions belong to verification/findings.py. F1 gate requires accepted deterministic norm and explicit recorded observation reference. |
-| `findings.py` | reviewed_changes_pending | Fingerprint is root-cause identity, not observation/probe identity. Factory enforces explicit FAIL and check/scenario but not deterministic+grounded+norm+refs; central boundary hardening is semantic and changes tests. |
+| `findings.py` | accepted_changed | Removed internal 16-argument factory and inlined sole production use in collect, -46 production LOC. Keep canonical Finding/ClassCatalog types; tests retarget actual collect, canonical model and catalog instead of preserving test-only factory. 169 affected tests, 2404 old/new matrix outcomes and 51 consumer comparisons; F1 and association canaries caught. Minimal-PoC read before association guards and merge tail preserved. collect 68->90 lines, CC16->18. Full-module independent review accepted canonical identity/fingerprint/merge/Poc ownership; 9 additional PoC cases passed. |
 | `invariant_projection.py` | accepted_unchanged | Accepted unchanged: owner of binding identity and norm indexes. Mutable index and frozen planned_ids have distinct roles; dedup, action binding and exclusion of proposal transitions verified. No structural findings. |
 | `norm_coverage.py` | independently_reviewed_structural_disposition_pending | Corrected canonical-type/index batch443→397(-46physical,-30code excludingdocstrings),-3Protocols,-5helpers. ExecutionResult/QdlExecutionView canonical;2schedulerprotocols retained. Canonicalprovenance lookup directly, attribution-index ownedsolelybyexistinghelper.21pins/26consumercases/2592rows/9errors/12findingcases+canary/coldimports pass. Independent45comparisons(39returns6errors) accepted; key/value distinction, malformedNone/emptyhistory/wholepathactions/fallback/deferredhash preserved. build115→129 andhelper25→30: remaininglongfunction/sig review notwaived. |
 | `norm_view.py` | merged_pending_final_validation | NormView merged into existing norms.py; distinct validation entrypoints preserved, no re-export shim. 18 production lines and one file removed; focused metadata/error-order and import checks passed. |
@@ -166,7 +186,7 @@ a module; global acceptance remains incomplete.
 | `oracles/marker.py` | reviewed_changes_pending | Import shared witness helpers; remove completeness/echo/response/value clones. Keep action+observation+scenario binding before projection and adversarial-target rule. |
 | `oracles/oob.py` | changed_pending_final_validation | Pure Oracle owns scoring. Runtime Coordinator owns pending state/deadlines; existing RunScope provider now finalizes collaborator via yield/finally. 71 focused tests plus 11 real-container/docs checks passed; actual poller termination and deregistration tested with fake external transport, no network. Cleanup does not admit final-poll callbacks into a previously returned result. |
 | `oracles/primitive_router.py` | reviewed_changes_pending | Router is real execution boundary. Extracts all signals even for outcome/sequence/field and witness facade re-parses norm; simplify only after pinning diagnostics and injected witness implementations. |
-| `oracles/roles.py` | reviewed_changes_pending | Keep candidate semantics, policy validation and default loader. Error/not-found selector methods currently have no production callers; remove only together with reviewed policy schema/data/test consumers. |
+| `oracles/roles.py` | accepted_unchanged | Keep candidate semantics, policy validation and default loader. Error/not-found selector methods currently have no production callers; remove only together with reviewed policy schema/data/test consumers. Independent support-module acceptance: distinct witness-channel policy tiers, YAML/schema validation and selectors preserved; no structure findings. Do not delete policy schema fields merely because no current oracle invokes their selectors. |
 | `oracles/sequence.py` | independently_reviewed_final_validation_pending | Shared existing transition-verdict assembly between paired and aggregated evidence; selection/order remain distinct. 29 production lines removed, no new entities. 29 tests and 19 full old/new verdict comparisons passed; deliberate FAIL-to-PASS mutation caught by four tests. Independent reviewer compared 1874 complete verdicts old/new, zero differences. |
 | `oracles/trace.py` | accepted_unchanged | Nine-line alias is reused by all primitive signatures. Inlining increases repetition and adds no architectural improvement. |
 | `oracles/witness.py` | reviewed_changes_pending | Large block duplicates verification.witness; reuse canonical helpers and PathWitness, delete uncalled old helper subgraph. Explicit pair/known-content APIs are test-only today: do not mistake them for live grammar execution. |
@@ -186,7 +206,7 @@ a module; global acceptance remains incomplete.
 
 ## Remaining work and limits
 
-Structural checks still report 26 complexity, 17 namespace, 16 length, nine
+Structural checks still report 24 complexity, 16 namespace, 16 length, six
 signature and one import-block findings. Assess them against responsibility and
 canonical contracts; do not add DTOs, aliases or helper files merely to silence
 rules. Large promotion, coverage, projection, slices and taxonomy routines remain

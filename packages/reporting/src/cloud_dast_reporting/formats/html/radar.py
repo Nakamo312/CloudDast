@@ -14,7 +14,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from cloud_dast.verification.taxonomy import DEFAULT_CATALOG
+from cloud_dast.api import DEFAULT_CATALOG
 from cloud_dast_reporting import ReportBundle
 
 _OWASP_API_2023: dict[str, tuple[str, str]] = {

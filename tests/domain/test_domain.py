@@ -10,110 +10,9 @@ from cloud_dast.model import (
     HttpStatus,
     Observation,
     Severity,
-    VerdictStatus,
 )
 from cloud_dast.model.events import InvestigationIntent
 from cloud_dast.model.evidence import response_tree_digest
-from cloud_dast.verification.findings import (
-    finding_from_observation,
-)
-
-
-def test_finding_requires_failed_observation(
-    invariant,
-    check,
-    denied_observation,
-) -> None:
-    with pytest.raises(ValueError, match="failed observation"):
-        finding_from_observation(
-            check,
-            denied_observation,
-            invariant,
-            verdict=VerdictStatus.PASS,
-            title="Invalid finding",
-            description="Expected denied result",
-            remediation="No remediation",
-        )
-
-
-def test_finding_assesses_the_explicit_norm_instead_of_the_generation_hint(
-    invariant,
-    check,
-    allowed_observation,
-) -> None:
-    foreign_invariant = invariant.model_copy(
-        update={"invariant_id": "another-invariant"}
-    )
-
-    finding = finding_from_observation(
-        check,
-        allowed_observation,
-        foreign_invariant,
-        verdict=VerdictStatus.FAIL,
-        minimal_poc=check.request,
-        title="Invalid finding",
-        description="Wrong invariant",
-        remediation="No remediation",
-    )
-    assert finding.invariant_id == foreign_invariant.invariant_id
-    assert finding.observation_id == allowed_observation.observation_id
-    assert finding.minimal_poc == check.request
-    assert check.invariant_id == invariant.invariant_id
-
-
-def test_finding_rejects_observation_from_another_check(
-    invariant,
-    check,
-    allowed_observation,
-) -> None:
-    foreign_observation = allowed_observation.model_copy(
-        update={"check_id": "another-check"}
-    )
-
-    with pytest.raises(ValueError, match="does not belong to the check"):
-        finding_from_observation(
-            check,
-            foreign_observation,
-            invariant,
-            verdict=VerdictStatus.FAIL,
-            title="Invalid finding",
-            description="Wrong check",
-            remediation="No remediation",
-        )
-
-
-def test_finding_uses_check_method_provenance(
-    invariant,
-    check,
-    allowed_observation,
-) -> None:
-    finding = finding_from_observation(
-        check,
-        allowed_observation,
-        invariant,
-        verdict=VerdictStatus.FAIL,
-        title="Finding",
-        description="Observed violation",
-        remediation="Fix policy",
-    )
-    assert finding.method_id == check.method_id
-
-
-def test_finding_carries_invariant_norm_fact(
-    invariant,
-    check,
-    allowed_observation,
-) -> None:
-    finding = finding_from_observation(
-        check,
-        allowed_observation,
-        invariant,
-        verdict=VerdictStatus.FAIL,
-        title="Finding",
-        description="Observed violation",
-        remediation="Fix policy",
-    )
-    assert finding.norm_fact == invariant.norm_fact
 
 
 def test_finding_defaults_to_explicit_classification_deficit() -> None:
@@ -132,46 +31,38 @@ def test_finding_defaults_to_explicit_classification_deficit() -> None:
     assert finding.classification_deficits == ("missing_classification_facts",)
 
 
-def test_finding_rejects_observation_from_another_scenario(
-    invariant,
-    check,
-    allowed_observation,
+@pytest.mark.parametrize("path_id", [None, "path:manual"])
+@pytest.mark.parametrize("with_norm", [False, True])
+def test_finding_preserves_manual_metadata_without_policy(
+    invariant, check, allowed_observation, path_id, with_norm
 ) -> None:
-    foreign_observation = allowed_observation.model_copy(
-        update={"scenario_id": "another-scenario"}
-    )
-
-    with pytest.raises(ValueError, match="observation scenario does not belong"):
-        finding_from_observation(
-            check,
-            foreign_observation,
-            invariant,
-            verdict=VerdictStatus.FAIL,
-            title="Invalid finding",
-            description="Wrong scenario",
-            remediation="No remediation",
-        )
-
-
-def test_finding_keeps_check_provenance(
-    invariant,
-    check,
-    allowed_observation,
-) -> None:
-    finding = finding_from_observation(
-        check,
-        allowed_observation,
-        invariant,
-        verdict=VerdictStatus.FAIL,
+    finding = Finding(
+        observation_id=allowed_observation.observation_id,
+        invariant_id=invariant.invariant_id,
+        method_id=check.method_id,
+        scenario_id=allowed_observation.scenario_id,
+        severity=invariant.severity,
         title="Cross-folder Lockbox secret access",
         description="Attacker read a foreign secret",
         remediation="Restrict folder-level role assignment",
+        path_id=path_id,
+        rationale="Manually reviewed evidence",
+        confidence=None,
+        evidence_refs=(allowed_observation.observation_id,),
+        minimal_poc=check.request,
+        norm_fact=invariant.norm_fact if with_norm else None,
     )
 
-    assert finding.observation_id == allowed_observation.observation_id
-    assert finding.invariant_id == invariant.invariant_id
-    assert finding.method_id == check.method_id
-    assert finding.scenario_id == check.scenario_id
+    assert finding.title == "Cross-folder Lockbox secret access"
+    assert finding.description == "Attacker read a foreign secret"
+    assert finding.remediation == "Restrict folder-level role assignment"
+    assert finding.confidence is None
+    assert finding.goal_id is finding.step_id is None
+    assert finding.path_id == path_id
+    assert finding.rationale == "Manually reviewed evidence"
+    assert finding.evidence_refs == (allowed_observation.observation_id,)
+    assert finding.minimal_poc == check.request
+    assert finding.norm_fact == (invariant.norm_fact if with_norm else None)
 
 
 @pytest.mark.parametrize(

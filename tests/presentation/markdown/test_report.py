@@ -35,8 +35,8 @@ from cloud_dast.qdl.graph import (
 )
 from cloud_dast.qdl.state_machine import state_machine_graph
 from cloud_dast.verification.coverage import Builder
-from cloud_dast.verification.coverage_models import evidence_target_fact
 from cloud_dast.verification.oracles import ClassificationLead
+from cloud_dast.verification.term_coverage import evidence_target_fact
 from cloud_dast_reporting import (
     CampaignInfo,
     CampaignMetricsSnapshot,

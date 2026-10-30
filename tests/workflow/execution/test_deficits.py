@@ -8,6 +8,7 @@ from cloud_dast.consultation import (
     ConsultationBudget,
 )
 from cloud_dast.contracts.execution import ScenarioBinding
+from cloud_dast.contracts.feedback import Signal
 from cloud_dast.contracts.plan import (
     InvariantProjection,
     QdlExecutionPath,
@@ -75,7 +76,6 @@ from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
 from cloud_dast.verification.differential.report import DiffReport
-from cloud_dast.verification.oracles import WitnessSignal
 
 _ANY_ACTION = Variable(name="AnyAction")
 _ANY_EFFECT = Variable(name="AnyEffect")
@@ -1120,14 +1120,14 @@ def test_variance_deficit_is_dispatchable() -> None:
 
 
 def test_signal_deficits_extend_response_semantics_and_variance() -> None:
-    marker = WitnessSignal(
+    marker = Signal(
         kind="marker_echo",
         action_id="action:get",
         evidence_refs=("observation:marker",),
         paths=("response.file",),
         marker="dast-marker",
     )
-    latency = WitnessSignal(
+    latency = Signal(
         kind="latency_delta",
         action_id="action:get",
         evidence_refs=("observation:control", "observation:treatment"),
@@ -1146,7 +1146,7 @@ def test_signal_deficits_extend_response_semantics_and_variance() -> None:
 
 
 def test_signal_deficit_closes_after_complete_qdl_interpretation() -> None:
-    signal = WitnessSignal(
+    signal = Signal(
         kind="marker_echo",
         action_id="action:get",
         evidence_refs=("observation:marker",),

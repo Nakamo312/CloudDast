@@ -70,14 +70,14 @@ from cloud_dast.qdl.state_machine import (
 from cloud_dast.verification.action_runtime import (
     build_action_runtime_ledger,
 )
-from cloud_dast.verification.coverage_models import (
-    _PRIMITIVES,
-    evaluate_term_coverage,
-)
 from cloud_dast.verification.norms import (
     EFFECT_PRIMITIVES,
     NormCompiler,
     Primitive,
+)
+from cloud_dast.verification.term_coverage import (
+    _PRIMITIVES,
+    evaluate_term_coverage,
 )
 
 type StateTransition = tuple[str, str, str]

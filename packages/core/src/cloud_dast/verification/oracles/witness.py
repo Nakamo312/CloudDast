@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from cloud_dast.contracts.feedback import Signal
 from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     Observation,
@@ -28,7 +29,6 @@ from cloud_dast.verification.oracles.trace import ObservationTrace
 from cloud_dast.verification.witness import (
     KnownContentWitness,
     ObservationPair,
-    WitnessSignal,
     extract_witness_signals,
     grounded_sink_fields,
     is_echo_path,
@@ -62,7 +62,7 @@ class WitnessSignalOracle:
         sink_types: dict[str, str] | None = None,
         known_content: KnownContentWitness | None = None,
         oob_events: Sequence[EvidenceEvent] = (),
-    ) -> tuple[WitnessSignal, ...]:
+    ) -> tuple[Signal, ...]:
         """Extract every cheap signal from one observation trace.
 
         Signal extraction is independent of the norm being scored.  It never
@@ -96,7 +96,7 @@ class WitnessSignalOracle:
         method_id: str | None = None,
         probe_fields: tuple[str, ...] = (),
         sink_types: dict[str, str] | None = None,
-        signals: tuple[WitnessSignal, ...] | None = None,
+        signals: tuple[Signal, ...] | None = None,
     ) -> PolicyVerdict:
         """Score the primitive named by a QDL norm without sink-class dispatch."""
 

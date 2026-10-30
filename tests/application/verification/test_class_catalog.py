@@ -6,11 +6,8 @@ from cloud_dast.contracts.plan import InvariantProjection
 from cloud_dast.model import (
     AccessOutcome,
     Check,
-    Finding,
     Observation,
-    PolicyVerdict,
     Severity,
-    VerdictStatus,
 )
 from cloud_dast.qdl.graph import (
     Atom,
@@ -34,9 +31,6 @@ from cloud_dast.qdl.graph import (
     transition,
 )
 from cloud_dast.runtime.deficits import gap_for_invariant as classification_deficit
-from cloud_dast.verification.findings import (
-    finding_from_observation,
-)
 from cloud_dast.verification.taxonomy import (
     DEFAULT_CATALOG,
     ClassCatalog,
@@ -580,23 +574,16 @@ def test_finding_is_labeled_with_class_and_cwe() -> None:
     )
     invariant = _invariant(effect)
     check = _check(("svc-attacker",))
-    observation = _observation(check)
 
-    finding = finding_from_observation(
-        check,
-        observation,
+    classification = DEFAULT_CATALOG.classify_finding(
         invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
+        action_id=f"action:{check.method_id}",
     )
 
-    assert isinstance(finding, Finding)
-    assert finding.vulnerability_class == "bola"
-    assert "CWE-639" in finding.cwe
-    assert finding.owasp == ("API1",)
-    assert finding.stride == ("E",)
+    assert classification.vulnerability_class == "bola"
+    assert "CWE-639" in classification.cwe
+    assert classification.owasp == ("API1",)
+    assert classification.stride == ("E",)
 
 
 def test_changed_finding_is_labeled_from_qdl_role_fact() -> None:
@@ -609,7 +596,6 @@ def test_changed_finding_is_labeled_from_qdl_role_fact() -> None:
         request=(("scope", "admin"),),
         identities=("svc-attacker",),
     )
-    observation = _observation(check)
     facts = ClassificationFacts.from_graph(
         _input_role_graph(
             "action:grpc:nsfy.shop.v1.KeyService.CreateApiKey",
@@ -618,22 +604,16 @@ def test_changed_finding_is_labeled_from_qdl_role_fact() -> None:
         )
     )
 
-    finding = finding_from_observation(
-        check,
-        observation,
+    classification = DEFAULT_CATALOG.classify_finding(
         invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
-        classification_facts=facts,
+        facts=facts,
+        action_id=f"action:{check.method_id}",
     )
 
-    assert isinstance(finding, Finding)
-    assert finding.vulnerability_class == "mass_assignment"
-    assert finding.cwe == ("CWE-915",)
-    assert finding.owasp == ("API3",)
-    assert finding.stride == ("T",)
+    assert classification.vulnerability_class == "mass_assignment"
+    assert classification.cwe == ("CWE-915",)
+    assert classification.owasp == ("API3",)
+    assert classification.stride == ("T",)
 
 
 def test_finding_without_norm_fact_is_a_classification_deficit() -> None:
@@ -644,21 +624,14 @@ def test_finding_without_norm_fact_is_a_classification_deficit() -> None:
         severity=Severity.HIGH,
     )
     check = _check(("svc-attacker",))
-    observation = _observation(check)
 
-    finding = finding_from_observation(
-        check,
-        observation,
+    classification = DEFAULT_CATALOG.classify_finding(
         invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
+        action_id=f"action:{check.method_id}",
     )
 
-    assert isinstance(finding, Finding)
-    assert finding.vulnerability_class == "classification_deficit"
-    assert finding.classification_deficits == ("missing_norm_fact",)
+    assert classification.vulnerability_class == "classification_deficit"
+    assert classification.deficit_reasons == ("missing_norm_fact",)
 
 
 def test_missing_norm_fact_projects_taxonomy_from_role_fact() -> None:
@@ -669,75 +642,18 @@ def test_missing_norm_fact_projects_taxonomy_from_role_fact() -> None:
         severity=Severity.HIGH,
     )
     check = _check(("svc-attacker",))
-    observation = _observation(check)
     facts = ClassificationFacts.from_graph(
         _input_role_graph("action:get-cert", "resource_id", "object_ref")
     )
 
-    finding = finding_from_observation(
-        check,
-        observation,
+    classification = DEFAULT_CATALOG.classify_finding(
         invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
-        classification_facts=facts,
+        facts=facts,
+        action_id=f"action:{check.method_id}",
     )
 
-    assert finding.vulnerability_class == "classification_deficit"
-    assert finding.classification_deficits == ("missing_norm_fact",)
-    assert finding.cwe == ("CWE-639",)
-    assert finding.owasp == ("A01",)
-    assert finding.stride == ("E",)
-
-
-def test_field_names_do_not_change_finding_path_or_class() -> None:
-    effect = allowed(Atom(value="action:get-order"))
-    invariant = _invariant(effect)
-    object_check = _check(
-        ("svc-attacker",),
-        request=(("order_id", "order-victim"),),
-    )
-    neutral_check = _check(
-        ("svc-attacker",),
-        request=(("page_size", 10),),
-    )
-    verdict = PolicyVerdict(
-        status=VerdictStatus.FAIL,
-        confidence=1.0,
-        rationale="IAM-grounded expected outcome is DENIED",
-        model_id="grounded-outcome",
-        deterministic=True,
-        grounded=True,
-    )
-
-    object_finding = finding_from_observation(
-        object_check,
-        _observation(object_check),
-        invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
-        path_id="path:same",
-        policy_verdict=verdict,
-    )
-    neutral_finding = finding_from_observation(
-        neutral_check,
-        _observation(neutral_check),
-        invariant,
-        title="Security policy violated",
-        description=invariant.statement,
-        remediation="enforce the policy",
-        verdict=VerdictStatus.FAIL,
-        path_id="path:same",
-        policy_verdict=verdict,
-    )
-
-    assert object_finding.path_id == neutral_finding.path_id == "path:same"
-    assert (
-        object_finding.vulnerability_class
-        == neutral_finding.vulnerability_class
-        == "function_level_authz"
-    )
+    assert classification.vulnerability_class == "classification_deficit"
+    assert classification.deficit_reasons == ("missing_norm_fact",)
+    assert classification.cwe == ("CWE-639",)
+    assert classification.owasp == ("A01",)
+    assert classification.stride == ("E",)

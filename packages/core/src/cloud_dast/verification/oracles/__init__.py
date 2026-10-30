@@ -31,8 +31,6 @@ from cloud_dast.verification.oracles.witness import WitnessSignalOracle
 from cloud_dast.verification.witness import (
     KnownContentWitness,
     ObservationPair,
-    WitnessSignal,
-    extract_witness_signals,
 )
 
 __all__ = [
@@ -51,9 +49,7 @@ __all__ = [
     "PrimitiveOracleRouter",
     "SequenceOracle",
     "KnownContentWitness",
-    "WitnessSignal",
     "WitnessSignalOracle",
     "WitnessRolePolicy",
     "evaluate_classification_leads",
-    "extract_witness_signals",
 ]
