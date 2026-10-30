@@ -81,22 +81,22 @@ _NODE_TYPES = {
     "Role": "Role",
 }
 
-_EDGE_LABELS = {
-    "EXPOSES": ("ApiSurface", "Service"),
-    "EXPOSES_METHOD": ("Service", "Method"),
-    "HAS_METHOD": ("Method", "ApiSurface"),
-    "HAS_PARAM": ("Method", "Param"),
-    "PARENT_OF": ("ResourceType", "ResourceType"),
-    "OWNS": ("Service", "ResourceType"),
-    "DEFINED_IN": ("Method", "Source"),
-    "APPLIES_TO": ("Permission", "ResourceType"),
-    "SERVES": ("Endpoint", "ApiSurface"),
-    "KNOWN_AS": ("Service", "Alias"),
-    "DESCRIBES": ("DocPage", "Service"),
-    "REQUIRES": ("Method", "Permission"),
-    "TARGETS": ("Method", "ResourceType"),
-    "REFERS_TO": ("Param", "ResourceType"),
-    "GRANTS": ("Role", "Permission"),
+_EDGE_SPECS = {
+    "EXPOSES": ("ApiSurface", "Service", _PART, False),
+    "EXPOSES_METHOD": ("Service", "Method", _PART, True),
+    "HAS_METHOD": ("Method", "ApiSurface", _PART, False),
+    "HAS_PARAM": ("Method", "Param", _PART, False),
+    "PARENT_OF": ("ResourceType", "ResourceType", _PART, True),
+    "OWNS": ("Service", "ResourceType", _PART, True),
+    "DEFINED_IN": ("Method", "Source", _PART, False),
+    "APPLIES_TO": ("Permission", "ResourceType", _APPLIES_TO, False),
+    "SERVES": ("Endpoint", "ApiSurface", _EXTENSION_PREDICATES["serves"], False),
+    "KNOWN_AS": ("Service", "Alias", _EXTENSION_PREDICATES["known_as"], False),
+    "DESCRIBES": ("DocPage", "Service", _EXTENSION_PREDICATES["describes"], False),
+    "REQUIRES": ("Method", "Permission", _REQUIRES, False),
+    "TARGETS": ("Method", "ResourceType", _TARGETS, False),
+    "REFERS_TO": ("Param", "ResourceType", _EXTENSION_PREDICATES["refers_to"], False),
+    "GRANTS": ("Role", "Permission", _GRANTS, False),
 }
 
 
@@ -735,7 +735,7 @@ class ContractProjector:
 
             facts = _edge_facts(edge, source, target, param_terms)
             if facts is None:
-                expected = _EDGE_LABELS.get(edge.kind)
+                expected = _EDGE_SPECS.get(edge.kind)
                 if expected is None:
                     unmapped.append(
                         ProjectionIssue(
@@ -857,36 +857,27 @@ class ContractProjector:
             )
             return
 
-        unknown_roles = [
-            label
-            for label in annotation.classifications
-            if label not in self._classification_profile.roles
-        ]
-        unknown_sinks = [
-            label
-            for label in annotation.sinks
-            if label not in self._classification_profile.sink_types
-        ]
-        if unknown_roles:
-            unmapped.append(
-                ProjectionIssue(
-                    category="unmapped",
-                    element="annotation",
-                    identifier=identifier,
-                    detail="source classification labels are not mapped",
-                    choices=tuple(sorted(set(unknown_roles))),
+        unknown_labels = False
+        for labels, mapping, kind in (
+            (
+                annotation.classifications,
+                self._classification_profile.roles,
+                "classification",
+            ),
+            (annotation.sinks, self._classification_profile.sink_types, "sink"),
+        ):
+            unknown = [label for label in labels if label not in mapping]
+            if unknown:
+                unknown_labels = True
+                unmapped.append(
+                    ProjectionIssue(
+                        category="unmapped",
+                        element="annotation",
+                        identifier=identifier,
+                        detail=f"source {kind} labels are not mapped",
+                        choices=tuple(sorted(set(unknown))),
+                    )
                 )
-            )
-        if unknown_sinks:
-            unmapped.append(
-                ProjectionIssue(
-                    category="unmapped",
-                    element="annotation",
-                    identifier=identifier,
-                    detail="source sink labels are not mapped",
-                    choices=tuple(sorted(set(unknown_sinks))),
-                )
-            )
 
         roles = sorted(
             {
@@ -902,7 +893,7 @@ class ContractProjector:
                 for sink_type in self._classification_profile.sink_types.get(label, ())
             }
         )
-        if not roles and not sink_types and not unknown_roles and not unknown_sinks:
+        if not roles and not sink_types and not unknown_labels:
             if annotation.classifications or annotation.sinks:
                 detail = "annotation has no mapped classification or sink labels"
             else:
@@ -1124,7 +1115,7 @@ def _edge_facts(
     target: _NodeState,
     param_terms: dict[str, tuple[Struct, ...]],
 ) -> tuple[Fact, ...] | None:
-    expected = _EDGE_LABELS.get(edge.kind)
+    expected = _EDGE_SPECS.get(edge.kind)
     if expected is None:
         return None
     if source.kind != expected[0] or target.kind != expected[1]:
@@ -1134,36 +1125,17 @@ def _edge_facts(
     ):
         return None
 
-    if edge.kind in {"EXPOSES", "HAS_METHOD", "DEFINED_IN"}:
-        return (_fact(_PART, source.atom, target.atom),)
-    if edge.kind in {"EXPOSES_METHOD", "PARENT_OF", "OWNS"}:
-        return (_fact(_PART, target.atom, source.atom),)
-    if edge.kind == "REQUIRES":
-        return (_fact(_REQUIRES, source.atom, target.atom),)
-    if edge.kind == "TARGETS":
-        return (_fact(_TARGETS, source.atom, target.atom),)
-    if edge.kind == "APPLIES_TO":
-        return (_fact(_APPLIES_TO, source.atom, target.atom),)
-    if edge.kind == "SERVES":
-        return (_fact(_EXTENSION_PREDICATES["serves"], source.atom, target.atom),)
-    if edge.kind == "KNOWN_AS":
-        return (_fact(_EXTENSION_PREDICATES["known_as"], source.atom, target.atom),)
-    if edge.kind == "DESCRIBES":
-        return (_fact(_EXTENSION_PREDICATES["describes"], source.atom, target.atom),)
-    if edge.kind == "GRANTS":
-        return (_fact(_GRANTS, source.atom, target.atom),)
     if edge.kind == "HAS_PARAM":
         term = input_field(source.atom, Atom(value=target.field_path))
-        return (_fact(_PART, term, source.atom),)
+        return (_fact(expected[2], term, source.atom),)
     if edge.kind == "REFERS_TO":
         terms = param_terms.get(edge.source_id, ())
         if not terms:
             return None
-        return tuple(
-            _fact(_EXTENSION_PREDICATES["refers_to"], term, target.atom)
-            for term in terms
-        )
-    return None
+        return tuple(_fact(expected[2], term, target.atom) for term in terms)
+    predicate, reverse = expected[2:]
+    left, right = (target.atom, source.atom) if reverse else (source.atom, target.atom)
+    return (_fact(predicate, left, right),)
 
 
 def _edge_identifier(

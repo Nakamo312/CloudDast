@@ -35,7 +35,7 @@ from cloud_dast.runtime.grounding.lifecycle import RunCoordinator
 from cloud_dast.runtime.metrics import CampaignMetrics
 from cloud_dast.runtime.recovery import Coordinator
 from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
-from cloud_dast.verification.coverage import build_matrix
+from cloud_dast.verification.coverage import Builder
 from cloud_dast.verification.oracles.latency import LatencyOracle
 
 logger = logging.getLogger("cloud_dast.runtime.campaign.initialization")
@@ -127,7 +127,7 @@ class Bootstrap:
             binding.plan.graph_hash,
             baseline_event_ids=baseline_event_ids,
         )
-        initial_coverage = build_matrix(
+        initial_coverage = Builder().build(
             binding.graph,
             service=request.service,
             invariants=binding.invariants,

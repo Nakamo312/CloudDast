@@ -23,7 +23,7 @@ from cloud_dast.runtime.campaign.evaluation import FindingEvaluator
 from cloud_dast.runtime.campaign.state import RuntimeState
 from cloud_dast.runtime.execution import BoundPathRunner
 from cloud_dast.runtime.metrics import CampaignMetrics
-from cloud_dast.verification.coverage import build_matrix
+from cloud_dast.verification.coverage import Builder
 from cloud_dast.verification.norm_coverage import build_norm_coverage
 
 logger = logging.getLogger("cloud_dast.runtime.campaign.finalization")
@@ -156,7 +156,7 @@ class Finalizer:
             replayed_findings=evaluation.replayed_findings,
             qdl_graph=final_binding.graph,
             qdl_plan=final_binding.plan,
-            coverage=build_matrix(
+            coverage=Builder().build(
                 final_binding.graph,
                 service=request.service,
                 invariants=final_binding.invariants,
@@ -164,7 +164,7 @@ class Finalizer:
                 scope=campaign.scope,
             ),
             norm_coverage=build_norm_coverage(
-                final_binding,
+                final_binding.execution,
                 execution,
                 campaign.execution.scheduler,
                 findings=evaluation.findings,

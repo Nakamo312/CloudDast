@@ -11,15 +11,21 @@ factor, never by a pipeline stage or action.
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
-from typing import Any, Protocol
+from typing import Protocol
 
 from cloud_dast.contracts.assessment import (
     NormCoverageRow,
     TermCoverageEvaluation,
     TermFactors,
 )
-from cloud_dast.contracts.plan import InvariantProjection
+from cloud_dast.contracts.execution import ExecutionResult, ObservationProvenance
+from cloud_dast.contracts.plan import (
+    InvariantProjection,
+    QdlExecutionPath,
+    QdlExecutionView,
+)
 from cloud_dast.model import (
     Check,
     Finding,
@@ -45,36 +51,20 @@ _GENERIC_PATH_REASONS = frozenset(
 )
 
 
-class _ProvenanceView(Protocol):
-    invariant_id: str
-    path_id: str
-
-
-class _ExecutionView(Protocol):
-    observations: tuple[Observation, ...]
-    checks: tuple[Check, ...]
-    provenance: Mapping[tuple[str, str], _ProvenanceView]
-    policy_verdicts: Mapping[tuple[str, str], object]
-
-
-class _BindingView(Protocol):
-    execution: Any
-
-
 class _SchedulerStateView(Protocol):
     selections: list[str]
 
 
 class _SchedulerView(Protocol):
-    paths: tuple[Any, ...]
+    paths: tuple[QdlExecutionPath, ...]
     state: _SchedulerStateView
 
     def is_prewarmed(self, path_id: str) -> bool: ...
 
 
 def build_norm_coverage(
-    binding: _BindingView,
-    execution: _ExecutionView,
+    plan: QdlExecutionView,
+    execution: ExecutionResult,
     scheduler: _SchedulerView,
     findings: Iterable[Finding] = (),
     events: Iterable[DomainEvent] = (),
@@ -87,7 +77,11 @@ def build_norm_coverage(
     scheduler_path_ids = {path.path_id for path in scheduler.paths}
     selected_ids = set(scheduler.state.selections)
     checks_by_id = {check.check_id: check for check in execution.checks}
-    invariant_ids_by_check = _invariant_ids_by_check(events)
+    invariant_ids_by_check = {
+        event.check_id: event.invariant_id
+        for event in events
+        if isinstance(event, CoverageUpdated)
+    }
     observations_by_invariant = _observations_by_invariant(
         execution,
         checks_by_id,
@@ -96,16 +90,30 @@ def build_norm_coverage(
     path_events = {
         event.path_id: event for event in events if isinstance(event, QdlPathEvaluated)
     }
-    step_reasons = _step_reasons_by_path(events)
-    findings_by_norm = _findings_by_norm(findings)
+    step_reasons = {
+        event.path_id: event.reason
+        for event in events
+        if isinstance(event, QdlStepEvaluated)
+        and event.reason not in _GENERIC_STEP_REASONS
+    }
+    finding_counts = Counter(finding.invariant_id for finding in findings)
+    paths_by_invariant: dict[str, list[QdlExecutionPath]] = defaultdict(list)
+    for path in plan.paths:
+        for invariant_id in {step.invariant.invariant_id for step in path.steps}:
+            paths_by_invariant[invariant_id].append(path)
+    check_actions: dict[str, set[str]] = defaultdict(set)
+    for check in checks_by_id.values():
+        check_actions[check.invariant_id].add(check.method_id)
 
     rows: list[NormCoverageRow] = []
-    for invariant_id, invariant in binding.execution.invariants.items():
-        paths = _paths_for_invariant(binding.execution.paths, invariant_id)
+    for invariant_id, invariant in plan.invariants.items():
+        paths = tuple(dict.fromkeys(paths_by_invariant.get(invariant_id, ())))
         observations = observations_by_invariant.get(invariant_id, ())
-        historical_path_ids = _path_ids_for_observations(
-            execution, observations, invariant_id
-        )
+        historical_path_ids = {
+            execution.provenance[(observation.observation_id, invariant_id)].path_id
+            for observation in observations
+            if (observation.observation_id, invariant_id) in execution.provenance
+        }
         path_ids = tuple(
             sorted({*(path.path_id for path in paths), *historical_path_ids})
         )
@@ -123,9 +131,10 @@ def build_norm_coverage(
         # transport boundary; a path event with ``probe_count`` alone must not
         # close a norm or hide a terminal action deficit.
         executed = bool(observations)
-        finding_count = len(findings_by_norm.get(invariant_id, ()))
-        verdict = _verdict(oracle_verdicts, executed, oracle_called, finding_count)
+        finding_count = finding_counts.get(invariant_id, 0)
+        verdict = _verdict(oracle_verdicts, executed, finding_count)
         selected = any(path_id in selected_ids for path_id in path_ids)
+        scheduled = any(path_id in scheduler_path_ids for path_id in path_ids)
         waiting_for_latency_baseline = any(
             scheduler.is_prewarmed(path_id) for path_id in path_ids
         )
@@ -133,7 +142,7 @@ def build_norm_coverage(
             path_ids,
             path_events,
             step_reasons,
-            scheduler_path_ids=scheduler_path_ids,
+            scheduled=scheduled,
             selected=selected,
             executed=executed,
             oracle_called=oracle_called,
@@ -144,8 +153,7 @@ def build_norm_coverage(
         )
         evaluation = _term_evaluation(
             invariant,
-            path_ids=path_ids,
-            scheduler_path_ids=scheduler_path_ids,
+            scheduled=scheduled,
             executed=executed,
             oracle_called=oracle_called,
             waiting_for_latency_baseline=waiting_for_latency_baseline,
@@ -156,8 +164,8 @@ def build_norm_coverage(
                 norm_id=invariant.norm_id,
                 effect=_effect(invariant),
                 path_count=len(path_ids),
-                scheduled=any(path_id in scheduler_path_ids for path_id in path_ids),
-                selected=any(path_id in selected_ids for path_id in path_ids),
+                scheduled=scheduled,
+                selected=selected,
                 executed=executed,
                 oracle_called=oracle_called,
                 verdict=verdict,
@@ -170,11 +178,7 @@ def build_norm_coverage(
                                 for path in paths
                                 for step in path.steps
                             ),
-                            *(
-                                check.method_id
-                                for check in checks_by_id.values()
-                                if check.invariant_id == invariant_id
-                            ),
+                            *check_actions.get(invariant_id, ()),
                         }
                     )
                 ),
@@ -189,38 +193,25 @@ def build_norm_coverage(
     return tuple(sorted(rows, key=lambda row: (row.norm_id, row.effect)))
 
 
-def _paths_for_invariant(
-    paths: Iterable[Any],
-    invariant_id: str,
-) -> tuple[Any, ...]:
-    return tuple(
-        dict.fromkeys(
-            path
-            for path in paths
-            if any(step.invariant.invariant_id == invariant_id for step in path.steps)
-        )
-    )
-
-
-def _invariant_ids_by_check(events: Iterable[DomainEvent]) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for event in events:
-        if isinstance(event, CoverageUpdated):
-            result[event.check_id] = event.invariant_id
-    return result
-
-
 def _observations_by_invariant(
-    execution: _ExecutionView,
+    execution: ExecutionResult,
     checks_by_id: Mapping[str, Check],
     invariant_ids_by_check: Mapping[str, str],
-) -> dict[str, tuple[Observation, ...]]:
+) -> dict[str, list[Observation]]:
+    if not execution.observations:
+        return {}
+    provenance_by_observation: dict[str, list[ObservationProvenance]] = defaultdict(
+        list
+    )
+    for (observation_id, _), provenance in execution.provenance.items():
+        provenance_by_observation[observation_id].append(provenance)
     result: dict[str, list[Observation]] = {}
     for observation in execution.observations:
         invariant_ids = {
             provenance.invariant_id
-            for (observation_id, _), provenance in execution.provenance.items()
-            if observation_id == observation.observation_id
+            for provenance in provenance_by_observation.get(
+                observation.observation_id, ()
+            )
         }
         if not invariant_ids:
             invariant_id = invariant_ids_by_check.get(observation.check_id)
@@ -231,41 +222,7 @@ def _observations_by_invariant(
                 invariant_ids.add(invariant_id)
         for invariant_id in sorted(invariant_ids):
             result.setdefault(invariant_id, []).append(observation)
-    return {
-        invariant_id: tuple(observations)
-        for invariant_id, observations in result.items()
-    }
-
-
-def _path_ids_for_observations(
-    execution: _ExecutionView,
-    observations: Iterable[Observation],
-    invariant_id: str,
-) -> set[str]:
-    observation_ids = {observation.observation_id for observation in observations}
-    return {
-        provenance.path_id
-        for (observation_id, norm_id), provenance in execution.provenance.items()
-        if observation_id in observation_ids and norm_id == invariant_id
-    }
-
-
-def _step_reasons_by_path(events: Iterable[DomainEvent]) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for event in events:
-        if not isinstance(event, QdlStepEvaluated):
-            continue
-        if event.reason in _GENERIC_STEP_REASONS:
-            continue
-        result[event.path_id] = event.reason
     return result
-
-
-def _findings_by_norm(findings: Iterable[Finding]) -> dict[str, tuple[Finding, ...]]:
-    result: dict[str, list[Finding]] = {}
-    for finding in findings:
-        result.setdefault(finding.invariant_id, []).append(finding)
-    return {key: tuple(values) for key, values in result.items()}
 
 
 def _effect(invariant: InvariantProjection) -> str:
@@ -291,8 +248,7 @@ def _effect_id(invariant: InvariantProjection) -> str:
 def _term_evaluation(
     invariant: InvariantProjection,
     *,
-    path_ids: tuple[str, ...],
-    scheduler_path_ids: set[str],
+    scheduled: bool,
     executed: bool,
     oracle_called: bool,
     waiting_for_latency_baseline: bool,
@@ -320,8 +276,7 @@ def _term_evaluation(
     factors = TermFactors(
         semantic=requirement is not None,
         setup=not waiting_for_latency_baseline,
-        oracle_channel=bool(path_ids)
-        and any(path_id in scheduler_path_ids for path_id in path_ids),
+        oracle_channel=scheduled,
         oracle_primitive=(
             requirement is not None
             and EFFECT_PRIMITIVES.get(requirement.name, "unknown") != "unknown"
@@ -344,7 +299,6 @@ def _requirement_term(invariant: InvariantProjection) -> Struct | None:
 def _verdict(
     verdicts: tuple[object, ...],
     executed: bool,
-    oracle_called: bool,
     finding_count: int,
 ) -> str:
     if finding_count:
@@ -370,7 +324,7 @@ def _blocked_reason(
     path_events: dict[str, QdlPathEvaluated],
     step_reasons: Mapping[str, str],
     *,
-    scheduler_path_ids: set[str],
+    scheduled: bool,
     selected: bool,
     executed: bool,
     oracle_called: bool,
@@ -382,7 +336,7 @@ def _blocked_reason(
     if not path_ids:
         return "no executable path bound to norm"
 
-    if not any(path_id in scheduler_path_ids for path_id in path_ids):
+    if not scheduled:
         return f"{len(path_ids)} paths were not added to the scheduler"
 
     if waiting_for_latency_baseline:

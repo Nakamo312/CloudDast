@@ -37,7 +37,7 @@ class WitnessSignal:
 
     @property
     def signature(self) -> str:
-        """Return a stable, value-free discriminator for deficit deduplication."""
+        """Identify a deficit by kind and its paths, timing delta or marker."""
 
         if self.delta_ms is not None:
             return f"{self.kind}:{self.delta_ms}"

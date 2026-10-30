@@ -1,13 +1,11 @@
 """Stable mode vocabulary and execution limits for differential discovery."""
 
-from typing import Literal
+from typing import Literal, get_args
 
 DiffMode = Literal["factors", "payload", "readback", "timing", "concurrency"]
 """Differential discovery modes (RFC §9.1)."""
 
-DIFF_MODES: frozenset[DiffMode] = frozenset(
-    {"factors", "payload", "readback", "timing", "concurrency"},
-)
+DIFF_MODES: frozenset[DiffMode] = frozenset(get_args(DiffMode))
 """Closed alphabet of differential discovery modes."""
 
 PAYLOAD_ROLE = "payload"

@@ -51,7 +51,7 @@ from cloud_dast.runtime.deficits import (
 from cloud_dast.runtime.execution.runner import EventProjection
 from cloud_dast.runtime.execution.scenarios import Checker
 from cloud_dast.runtime.metrics import CampaignMetrics
-from cloud_dast.verification.coverage import build_matrix
+from cloud_dast.verification.coverage import Builder
 from tests.support.guardrails import AllowAllGuardrail
 
 
@@ -404,7 +404,7 @@ def test_coverage_keys_exposed_output_paths_verbatim() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     assert sorted(cell.field_name for cell in matrix.fields) == [
         "items.0.foo.bar",

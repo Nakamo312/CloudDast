@@ -9,6 +9,7 @@ from cloud_dast.model import (
     Observation,
 )
 from cloud_dast.ports import ModelResponse
+from cloud_dast.proposals import ProposalPromotionRequest
 from cloud_dast.qdl.graph import (
     Atom,
     Context,
@@ -213,7 +214,7 @@ def test_promotion_response_filter_keeps_unrelated_semantics() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert any(
         fact.context is Context.ACCEPTED
@@ -260,7 +261,7 @@ def test_promotion_reports_rejected_norm_as_a_typed_issue() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.rejected_norms == ("norm:invalid",)
     assert any(
@@ -289,7 +290,7 @@ def test_promotion_reports_parked_classification_as_a_typed_issue() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.parked_classifications is not None
     assert any(

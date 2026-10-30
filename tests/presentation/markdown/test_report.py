@@ -34,7 +34,7 @@ from cloud_dast.qdl.graph import (
     outcome,
 )
 from cloud_dast.qdl.state_machine import state_machine_graph
-from cloud_dast.verification.coverage import build_matrix
+from cloud_dast.verification.coverage import Builder
 from cloud_dast.verification.coverage_models import evidence_target_fact
 from cloud_dast.verification.oracles import ClassificationLead
 from cloud_dast_reporting import (
@@ -102,7 +102,7 @@ def _qdl_matrix() -> CoverageMatrix:
         forbidden_states=(("no_published", "published"),),
         observed_transitions=(("publish", "draft", "published"),),
     )
-    return build_matrix(QdlGraph(facts=(*contract_facts, *state_machine.facts)))
+    return Builder().build(QdlGraph(facts=(*contract_facts, *state_machine.facts)))
 
 
 def _render(

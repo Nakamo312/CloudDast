@@ -33,7 +33,7 @@ def declared_actions(
 
     return tuple(
         sorted(
-            _term_key(fact.args[0])
+            _term_text(fact.args[0])
             for fact in graph.facts_for("is", contexts={context})
             if len(fact.args) == 2 and _term_text(fact.args[1]) == "Action"
         )
@@ -70,12 +70,7 @@ def build_action_runtime_ledger(
         is_recovery = bool(getattr(path, "recovery", False)) or (
             getattr(path, "kind", None) == "smoke"
         )
-        for step in getattr(path, "steps", ()):
-            method = getattr(step, "method", None)
-            method_id = getattr(method, "method_id", None)
-            if not isinstance(method_id, str):
-                continue
-            action = canonical_action_id(method_id)
+        for action in _step_actions(path):
             bound_paths[action].add(path_id)
             if is_recovery:
                 recovery_paths[action].add(path_id)
@@ -92,9 +87,7 @@ def build_action_runtime_ledger(
     method_ids: dict[str, str] = {}
     for event in events:
         if isinstance(event, CheckCompleted):
-            method_id = event.method_id or (
-                event.check.method_id if event.check is not None else None
-            )
+            method_id = event.method_id or getattr(event.check, "method_id", None)
             if not isinstance(method_id, str):
                 continue
             action = canonical_action_id(method_id)
@@ -118,13 +111,10 @@ def build_action_runtime_ledger(
             recovery_path_ids=tuple(sorted(recovery_paths.get(action, set()))),
             request_execution_ids=tuple(sorted(completed.get(action, set()))),
             coverage_update_ids=tuple(sorted(updated.get(action, set()))),
-            terminal_deficit=(
-                sorted(
-                    deficits_by_action.get(action, ()),
-                    key=lambda deficit: (deficit.deficit_kind, deficit.reason),
-                )[0]
-                if deficits_by_action.get(action)
-                else None
+            terminal_deficit=min(
+                deficits_by_action.get(action, ()),
+                key=lambda deficit: (deficit.deficit_kind, deficit.reason),
+                default=None,
             ),
         )
         for action in declared
@@ -144,10 +134,15 @@ def _path_action_ids(path: object) -> tuple[str, ...]:
         return tuple(
             canonical_action_id(action) for action in actions if isinstance(action, str)
         )
+    return _step_actions(path)
+
+
+def _step_actions(path: object) -> tuple[str, ...]:
+    """Read bound step methods without consulting logical action attributes."""
+
     result: list[str] = []
     for step in getattr(path, "steps", ()):
-        method = getattr(step, "method", None)
-        method_id = getattr(method, "method_id", None)
+        method_id = getattr(getattr(step, "method", None), "method_id", None)
         if isinstance(method_id, str):
             result.append(canonical_action_id(method_id))
     return tuple(result)
@@ -157,7 +152,3 @@ def _term_text(term: Term) -> str:
     if isinstance(term, Atom):
         return str(term.value)
     return canonical_json(term)
-
-
-def _term_key(term: Term) -> str:
-    return _term_text(term)

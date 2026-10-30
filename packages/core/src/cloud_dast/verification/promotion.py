@@ -511,18 +511,10 @@ def park_proposal(
 
 
 def promote_proposal(
-    source: QdlGraph,
-    proposal: QdlGraph,
+    request: ProposalPromotionRequest,
     *,
     max_norms: int | None = DEFAULT_MAX_PROMOTED_NORMS,
     max_semantic_facts: int = MAX_SEMANTIC_FACTS,
-    duration_thresholds: Mapping[str, int] | None = None,
-    evidence_fields: frozenset[str] | None = None,
-    evidence_refs: frozenset[str] = frozenset(),
-    action_ids: frozenset[str] | tuple[str, ...] = frozenset(),
-    approved_classifications: frozenset[str] = frozenset(),
-    runtime_evidence_exempt_predicates: frozenset[str] = frozenset(),
-    classification_context: ClassificationPromotionContext | None = None,
 ) -> ProposalPromotionResult:
     """Promote only graph-grounded, action-bound norms from a proposal.
 
@@ -562,31 +554,35 @@ def promote_proposal(
     discarded.
     """
 
+    normalized_action_ids = frozenset(request.action_ids)
     if max_norms is not None and max_norms <= 0:
         raise ValueError("max_norms must be positive or None")
     if max_semantic_facts <= 0:
         raise ValueError("max_semantic_facts must be positive")
-    evidence_refs = frozenset(evidence_refs)
-    if classification_context is not None:
-        classification_context = classification_context.with_evidence_refs(
-            evidence_refs
-        )
+    evidence_refs = frozenset(request.evidence_refs)
+    classification_context = (
+        request.classification_context.with_evidence_refs(evidence_refs)
+        if request.classification_context is not None
+        else None
+    )
 
-    declarations = _declarations(source, proposal)
-    review_declarations = _declarations(source, proposal, include_untrusted=True)
-    source_actions = source.declared_identifiers(
+    declarations = _declarations(request.source, request.proposal)
+    review_declarations = _declarations(
+        request.source, request.proposal, include_untrusted=True
+    )
+    source_actions = request.source.declared_identifiers(
         "Action", contexts=_EXECUTABLE_CONTEXTS
     )
-    allowed_actions = _requested_actions(action_ids)
+    allowed_actions = _requested_actions(normalized_action_ids)
     if allowed_actions is not None:
         source_actions &= allowed_actions
     compiler = NormCompiler()
-    candidates = _norm_candidates(proposal)
+    candidates = _norm_candidates(request.proposal)
     supported_effects: frozenset[str] = (
         _supported_semantic_effects(
-            source,
-            proposal,
-            evidence_fields,
+            request.source,
+            request.proposal,
+            request.evidence_fields,
         )
         if any(
             len(fact.args) == 2
@@ -599,7 +595,7 @@ def promote_proposal(
     )
     valid_norms: list[tuple[str, QdlGraph]] = []
     invalid_norms: list[str] = []
-    attacker_may_actions = _attacker_may_actions(source)
+    attacker_may_actions = _attacker_may_actions(request.source)
 
     for norm_id, facts in candidates.items():
         if len(facts) != 1:
@@ -610,14 +606,14 @@ def promote_proposal(
             continue
         graph = _validate_norm(
             facts[0],
-            source=source,
-            proposal=proposal,
+            source=request.source,
+            proposal=request.proposal,
             source_actions=source_actions,
             declarations=declarations,
             compiler=compiler,
-            duration_thresholds=duration_thresholds,
+            duration_thresholds=request.duration_thresholds,
             supported_effects=supported_effects,
-            evidence_fields=evidence_fields,
+            evidence_fields=request.evidence_fields,
         )
         if graph is None:
             invalid_norms.append(norm_id)
@@ -653,7 +649,7 @@ def promote_proposal(
         for norm_id, _build_graph in overflow
     )
     parked_norms = _parked_policy_norms(
-        proposal,
+        request.proposal,
         review_declarations,
         attacker_may_actions,
     )
@@ -664,25 +660,25 @@ def promote_proposal(
         parked,
         semantic_issues,
     ) = _promote_semantic_facts(
-        source,
-        proposal,
+        request.source,
+        request.proposal,
         declarations,
         source_actions,
         max_semantic_facts=max_semantic_facts,
-        evidence_fields=evidence_fields,
+        evidence_fields=request.evidence_fields,
         evidence_refs=evidence_refs,
-        approved_classifications=approved_classifications,
-        runtime_evidence_exempt_predicates=runtime_evidence_exempt_predicates,
+        approved_classifications=request.approved_classifications,
+        runtime_evidence_exempt_predicates=request.runtime_evidence_exempt_predicates,
         classification_context=classification_context,
     )
     promotion_issues.extend(semantic_issues)
     filtered_semantic, response_issues = (
         _filter_response_semantics(
             semantic,
-            source,
+            request.source,
             allowed_actions=allowed_actions,
-            evidence_fields=evidence_fields,
-            approved_classifications=approved_classifications,
+            evidence_fields=request.evidence_fields,
+            approved_classifications=request.approved_classifications,
             classification_context=classification_context,
         )
         if semantic is not None
@@ -699,7 +695,7 @@ def promote_proposal(
         else frozenset()
     )
     parked_semantics = _parked_extra_semantics(
-        proposal,
+        request.proposal,
         review_declarations,
         promoted_semantic_keys,
     )

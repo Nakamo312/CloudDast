@@ -204,7 +204,7 @@ def test_promotes_graph_grounded_action_bound_norm() -> None:
         ),
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ("norm:no-read",)
     assert set(result.rejected_norms) == {"norm:no-write", "norm:no-change"}
@@ -313,7 +313,7 @@ def test_promotion_limit_is_applied() -> None:
         (Atom(value="norm:second"), allowed(Atom(value="action:get-secret"))),
     )
 
-    result = promote_proposal(source, proposal, max_norms=1)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal), max_norms=1)
 
     assert result.promoted_norms == ("norm:first",)
     assert len(QdlPlanner().plan(result.graph).invariants) == 1
@@ -340,7 +340,7 @@ def test_model_norm_contradicting_policy_is_parked_as_a_lead() -> None:
         (Atom(value="norm:no-allowed"), allowed(Atom(value="action:get")))
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ()
@@ -424,7 +424,7 @@ def test_a25_unexpected_authorized_actions_do_not_promote(method_id: str) -> Non
 
 def test_promotion_rejects_invalid_limit() -> None:
     with pytest.raises(ValueError, match="max_norms"):
-        promote_proposal(_source(), _proposal(), max_norms=0)
+        promote_proposal(ProposalPromotionRequest(_source(), _proposal()), max_norms=0)
 
 
 def test_promotion_keeps_semantic_facts_with_declarations() -> None:
@@ -460,7 +460,7 @@ def test_promotion_keeps_semantic_facts_with_declarations() -> None:
         )
     )
 
-    result = promote_proposal(contract, proposal)
+    result = promote_proposal(ProposalPromotionRequest(contract, proposal))
 
     assert result.promoted_semantic_facts >= 1
     facts = {(f.predicate.name, f.context) for f in result.graph.facts}
@@ -505,8 +505,7 @@ def test_semantic_promotion_cap_reports_overflow() -> None:
         )
 
     result = promote_proposal(
-        source,
-        QdlGraph(facts=tuple(facts)),
+        ProposalPromotionRequest(source, QdlGraph(facts=tuple(facts))),
         max_semantic_facts=3,
     )
 
@@ -517,7 +516,9 @@ def test_semantic_promotion_cap_reports_overflow() -> None:
 
 def test_semantic_promotion_rejects_invalid_cap() -> None:
     with pytest.raises(ValueError, match="max_semantic_facts"):
-        promote_proposal(_source(), _proposal(), max_semantic_facts=0)
+        promote_proposal(
+            ProposalPromotionRequest(_source(), _proposal()), max_semantic_facts=0
+        )
 
 
 @pytest.mark.parametrize("source_declares_role", [False, True])
@@ -552,7 +553,7 @@ def test_sensitive_field_role_requires_source_provenance(
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
     effects = sensitive_exposure_effects(result.graph)
 
     assert bool(effects) is source_declares_role
@@ -596,9 +597,7 @@ def test_unproven_classification_promotes_from_observed_evidence() -> None:
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_fields=frozenset({"email"}),
+        ProposalPromotionRequest(source, proposal, evidence_fields=frozenset({"email"}))
     )
 
     assert "norm:no-leak" in result.promoted_norms
@@ -633,9 +632,7 @@ def test_evidence_grounds_new_field_only_on_target_resource() -> None:
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_fields=frozenset({"email"}),
+        ProposalPromotionRequest(source, proposal, evidence_fields=frozenset({"email"}))
     )
 
     assert any(
@@ -722,7 +719,7 @@ def _semantic_proposal(
 def test_promotes_action_bound_semantic_effect(effect_kind: str) -> None:
     source, proposal, effect = _semantic_proposal(effect_kind, bound=True)
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ("norm:semantic",)
     assert result.rejected_norms == ()
@@ -741,7 +738,7 @@ def test_rejects_duration_proposal_without_runtime_baseline() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:latency",)
@@ -785,7 +782,7 @@ def test_calibrates_duration_proposal_from_runtime_baseline() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ("norm:latency",)
     invariants = QdlPlanner().plan(result.graph).invariants
@@ -797,7 +794,7 @@ def test_calibrates_duration_proposal_from_runtime_baseline() -> None:
 def test_rejects_semantic_effect_without_an_action_binding(effect_kind: str) -> None:
     source, proposal, _effect = _semantic_proposal(effect_kind, bound=False)
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:semantic",)
@@ -830,7 +827,7 @@ def test_promotes_changed_effect_from_privileged_target_semantics() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ("norm:no-role-change",)
     assert result.rejected_norms == ()
@@ -857,7 +854,7 @@ def test_promotes_filesystem_reach_semantics() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_semantic_facts >= 1
     assert any(
@@ -888,7 +885,7 @@ def test_promotes_business_flow_reach_semantics() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_semantic_facts >= 1
     assert any(
@@ -918,7 +915,7 @@ def test_reach_rejects_proposal_declared_sink_type() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_semantic_facts == 0
     assert not any(
@@ -959,7 +956,7 @@ def test_promotes_graph_grounded_grammar_facts() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     promoted = {
         fact.predicate.name
@@ -1015,7 +1012,9 @@ def test_sink_type_relation_is_independent_of_declaration_order(
         else None
     )
 
-    result = promote_proposal(source, proposal, classification_context=context)
+    result = promote_proposal(
+        ProposalPromotionRequest(source, proposal, classification_context=context)
+    )
 
     assert result.promoted_norms == ("norm:no-injection",)
     assert result.rejected_norms == ()
@@ -1068,13 +1067,15 @@ def test_sink_type_relation_excludes_model_only_and_untrusted_source_types(
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(sink),
-            allowed_values=frozenset({"interpreter"}),
-            invariant_id="inv:no-injection",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(sink),
+                allowed_values=frozenset({"interpreter"}),
+                invariant_id="inv:no-injection",
+            ),
+        )
     )
 
     assert result.promoted_norms == ()
@@ -1145,7 +1146,7 @@ def test_reach_requires_exact_source_field_declaration(
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     expected = source_context in {Context.CONTRACT, Context.ACCEPTED} and (
         declaration_type in {"Field", field_type}
@@ -1203,7 +1204,7 @@ def test_dependency_closure_cannot_launder_schema_or_sink_types_across_promotion
         )
     )
 
-    first = promote_proposal(source, first_proposal)
+    first = promote_proposal(ProposalPromotionRequest(source, first_proposal))
 
     copied_declaration = any(
         fact.context is Context.ACCEPTED
@@ -1231,7 +1232,9 @@ def test_dependency_closure_cannot_launder_schema_or_sink_types_across_promotion
         )
     )
 
-    second = promote_proposal(merge_graphs(source, first.graph), second_proposal)
+    second = promote_proposal(
+        ProposalPromotionRequest(merge_graphs(source, first.graph), second_proposal)
+    )
 
     promoted_reach = any(
         fact.context is Context.ACCEPTED and fact.predicate.name == "reaches"
@@ -1309,7 +1312,7 @@ def test_reached_norm_requires_graph_reach(has_reach: bool) -> None:
         facts.append(_fact("reaches", (query, sink), Context.PROPOSAL))
     proposal = QdlGraph(facts=tuple(facts))
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == (("norm:no-injection",) if has_reach else ())
     assert result.rejected_norms == (() if has_reach else ("norm:no-injection",))
@@ -1337,7 +1340,7 @@ def test_has_norm_requires_sensitive_exposure_role() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:no-leak",)
@@ -1365,9 +1368,9 @@ def test_promotes_registry_causal_semantics(effect_kind: str) -> None:
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_refs=frozenset({"observation:live-ownership"}),
+        ProposalPromotionRequest(
+            source, proposal, evidence_refs=frozenset({"observation:live-ownership"})
+        )
     )
 
     assert result.promoted_norms == ()
@@ -1403,7 +1406,7 @@ def test_ownership_effects_require_evidence(effect_kind: str) -> None:
         )
     )
 
-    rejected = promote_proposal(source, proposal)
+    rejected = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert not any(
         fact.context is Context.ACCEPTED
@@ -1439,9 +1442,9 @@ def test_alternatives_create_is_rejected_without_evidence() -> None:
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        action_ids=frozenset({"action:svc.ApplyCoupon"}),
+        ProposalPromotionRequest(
+            source, proposal, action_ids=frozenset({"action:svc.ApplyCoupon"})
+        )
     )
 
     assert result.promoted_semantic_facts == 0
@@ -1476,9 +1479,9 @@ def test_consultation_package_promotes_causes_and_parks_classification() -> None
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_refs=frozenset({"observation:live-create"}),
+        ProposalPromotionRequest(
+            source, proposal, evidence_refs=frozenset({"observation:live-create"})
+        )
     )
 
     assert any(
@@ -1515,11 +1518,11 @@ def test_runtime_dependency_fact_requires_observation_evidence() -> None:
         )
     )
 
-    without_evidence = promote_proposal(source, proposal)
+    without_evidence = promote_proposal(ProposalPromotionRequest(source, proposal))
     with_evidence = promote_proposal(
-        source,
-        proposal,
-        evidence_refs=frozenset({"observation:live-read"}),
+        ProposalPromotionRequest(
+            source, proposal, evidence_refs=frozenset({"observation:live-read"})
+        )
     )
 
     assert without_evidence.promoted_semantic_facts == 0
@@ -1539,7 +1542,7 @@ def test_promotion_ignores_runtime_action_declarations() -> None:
         (Atom(value="norm:no-read"), allowed(Atom(value="action:get-secret")))
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:no-read",)
@@ -1554,7 +1557,7 @@ def test_promotion_rejects_an_unknown_primitive() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:no-create",)
@@ -1568,7 +1571,7 @@ def test_promotion_limit_still_classifies_later_candidates() -> None:
         (Atom(value="norm:c-invalid"), allowed(Atom(value="action:unknown"))),
     )
 
-    result = promote_proposal(source, proposal, max_norms=1)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal), max_norms=1)
 
     assert result.promoted_norms == ("norm:a-valid",)
     assert set(result.rejected_norms) == {"norm:b-valid", "norm:c-invalid"}
@@ -1595,7 +1598,7 @@ def test_promotion_requires_self_contained_accepted_references() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.rejected_norms == ("norm:no-injection",)
@@ -1627,7 +1630,7 @@ def test_proposal_targets_cannot_bind_changed_norm() -> None:
         )
     )
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
 
@@ -1661,9 +1664,7 @@ def test_measured_evidence_cannot_bypass_sink_witness_policy() -> None:
     proposal = _measured_reach_proposal()
 
     result = promote_proposal(
-        source,
-        proposal,
-        action_ids=("action:get",),
+        ProposalPromotionRequest(source, proposal, action_ids=("action:get",))
     )
 
     assert result.promoted_norms == ()

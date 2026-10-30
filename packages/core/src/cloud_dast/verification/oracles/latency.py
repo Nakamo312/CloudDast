@@ -90,7 +90,7 @@ class LatencyBaseline:
 
 
 @dataclass(frozen=True, slots=True)
-class _LatencyNorm:
+class _Duration:
     action_id: str | None
     duration_ms: float | None
 
@@ -130,7 +130,7 @@ class AvailabilityOracle:
         *,
         method_id: str | None = None,
     ) -> PolicyVerdict:
-        norm = _parse_latency_norm(invariant)
+        norm = _parse_duration(invariant)
         if norm is None:
             return self._unscoreable("invariant is not a latency-bound QDL norm")
         mismatch = explain_mismatch(norm.action_id, method_id)
@@ -281,7 +281,7 @@ class LatencyOracle:
         *,
         method_id: str | None = None,
     ) -> PolicyVerdict:
-        norm = _parse_latency_norm(invariant)
+        norm = _parse_duration(invariant)
         if norm is None:
             return self._unscoreable("invariant is not a latency-bound QDL norm")
         mismatch = explain_mismatch(norm.action_id, method_id)
@@ -413,7 +413,7 @@ def _paired_delta(pair: tuple[float, float]) -> float:
     return float(probe) - float(control)
 
 
-def _parse_latency_norm(invariant: InvariantProjection) -> _LatencyNorm | None:
+def _parse_duration(invariant: InvariantProjection) -> _Duration | None:
     fact = invariant.norm_fact
     if (
         fact is None
@@ -441,7 +441,7 @@ def _parse_latency_norm(invariant: InvariantProjection) -> _LatencyNorm | None:
         if isinstance(duration, Atom) and isinstance(duration.value, int)
         else None
     )
-    return _LatencyNorm(action_id=action_id, duration_ms=duration_ms)
+    return _Duration(action_id=action_id, duration_ms=duration_ms)
 
 
 def _is_delivered(observation: Observation) -> bool:

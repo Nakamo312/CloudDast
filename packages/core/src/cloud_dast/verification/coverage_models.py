@@ -63,16 +63,10 @@ from cloud_dast.qdl.graph import (
     Struct,
     Term,
     TermKind,
-    Variable,
 )
 from cloud_dast.qdl.norms import Primitive
-from cloud_dast.qdl.semantic_norm_compiler import (
-    EXPOSURE_WITNESS_NAMES,
-)
 
 _PRIMITIVES: frozenset[str] = frozenset(get_args(Primitive))
-# Kept as an internal import surface for the existing coverage builder.
-_EXPOSURE_WITNESS_NAMES = EXPOSURE_WITNESS_NAMES
 
 
 _FACTOR_LEAVES: tuple[tuple[str, CoverageFactor, BlindDeficitType], ...] = (
@@ -130,12 +124,6 @@ def evaluate_term_coverage(
         missing_factor=None,
         rationale=rationale or "all coverage factors are satisfied",
     )
-
-
-_ANY_ACTION = Variable(name="AnyAction")
-_ANY_EFFECT = Variable(name="AnyEffect")
-_ANY_ROLE = Variable(name="AnyRole")
-_ANY_TARGET = Variable(name="AnyTarget")
 
 
 def _reference(name: str) -> ArgumentSchema:

@@ -47,7 +47,7 @@ from cloud_dast.runtime.scheduler import CoverageDrivenScheduler
 from cloud_dast.verification.contract_projection import (
     EXTENSION_PREDICATE_SCHEMAS,
 )
-from cloud_dast.verification.coverage import build_matrix
+from cloud_dast.verification.coverage import Builder
 from cloud_dast.verification.evidence_facts import verified_fact
 from cloud_dast.verification.oracles.grounded import (
     GroundedOutcomeOracle,
@@ -446,7 +446,7 @@ def test_historical_coverage_events_do_not_close_current_run() -> None:
         baseline_event_ids=frozenset(event.event_id for event in historical_events),
     )
 
-    historical_matrix = build_matrix(
+    historical_matrix = Builder().build(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=historical_events,
@@ -471,7 +471,7 @@ def test_historical_coverage_events_do_not_close_current_run() -> None:
         current_observation, campaign_id="campaign:current", run_id="run:current"
     )
 
-    current_matrix = build_matrix(
+    current_matrix = Builder().build(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=current_events,

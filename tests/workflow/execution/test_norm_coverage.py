@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from cloud_dast.contracts.execution import (
     ExecutionResult,
     ObservationProvenance,
@@ -23,7 +27,7 @@ from cloud_dast.model import (
     Severity,
     VerdictStatus,
 )
-from cloud_dast.model.events import QdlPathEvaluated, QdlStepEvaluated
+from cloud_dast.model.events import CoverageUpdated, QdlPathEvaluated, QdlStepEvaluated
 from cloud_dast.qdl.graph import (
     Atom,
     Context,
@@ -203,7 +207,7 @@ def test_norm_coverage_reports_scheduler_oracle_and_verdict() -> None:
         ),
     )
 
-    rows = build_norm_coverage(binding, execution, scheduler, events=events)
+    rows = build_norm_coverage(binding.execution, execution, scheduler, events=events)
 
     assert len(rows) == 1
     row = rows[0]
@@ -233,7 +237,7 @@ def test_norm_coverage_explains_unbound_norm() -> None:
     scheduler = CoverageDrivenScheduler(())
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -269,7 +273,7 @@ def test_norm_coverage_classifies_typed_blind_deficits() -> None:
     scheduler = CoverageDrivenScheduler(())
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -293,7 +297,7 @@ def test_norm_coverage_classifies_typed_blind_deficits() -> None:
         invariant=no_semantics,
     )
     semantic_rows = build_norm_coverage(
-        semantic_binding,
+        semantic_binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -328,7 +332,7 @@ def test_norm_coverage_explains_budget_exhaustion_before_selection() -> None:
     scheduler = CoverageDrivenScheduler((path,))
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
         budget_exhausted=True,
@@ -372,7 +376,7 @@ def test_norm_coverage_reports_prewarmed_duration_path() -> None:
     )
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -439,7 +443,7 @@ def test_norm_coverage_distinguishes_missing_oracle_from_unscoreable() -> None:
         },
     )
 
-    rows = build_norm_coverage(binding, execution, scheduler)
+    rows = build_norm_coverage(binding.execution, execution, scheduler)
 
     assert rows[0].executed is True
     assert rows[0].oracle_called is False
@@ -533,7 +537,7 @@ def test_norm_coverage_aggregates_superseded_path_versions() -> None:
         ),
     )
 
-    rows = build_norm_coverage(binding, execution, scheduler, events=events)
+    rows = build_norm_coverage(binding.execution, execution, scheduler, events=events)
 
     assert len(rows) == 1
     row = rows[0]
@@ -582,7 +586,7 @@ def test_norm_deficit_is_typed_by_missing_factor() -> None:
     scheduler = CoverageDrivenScheduler(())
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -598,7 +602,7 @@ def test_norm_without_deterministic_primitive_is_oracle_blind() -> None:
     scheduler = CoverageDrivenScheduler((path,))
 
     rows = build_norm_coverage(
-        binding,
+        binding.execution,
         ExecutionResult((), (), {}, {}),
         scheduler,
     )
@@ -644,7 +648,7 @@ def test_executed_norm_without_verdict_is_runtime_evidence_deficit() -> None:
         },
     )
 
-    rows = build_norm_coverage(binding, execution, scheduler)
+    rows = build_norm_coverage(binding.execution, execution, scheduler)
 
     row = rows[0]
     assert row.executed is True
@@ -652,3 +656,264 @@ def test_executed_norm_without_verdict_is_runtime_evidence_deficit() -> None:
     assert row.deficit == "evidence_blind"
     assert row.missing_factor == "runtime"
     assert row.blocked_reason == "no deterministic oracle produced a verdict"
+
+
+def _two_norms():
+    first = _changed_invariant()
+    second = first.model_copy(
+        update={"invariant_id": "inv:second", "norm_id": "norm:second"}
+    )
+    paths = tuple(
+        replace(_bound_path(inv), path_id=f"path:{index}")
+        for index, inv in enumerate((first, second))
+    )
+    binding = _binding(paths[0], first)
+    return (
+        replace(
+            binding,
+            execution=replace(
+                binding.execution,
+                paths=paths,
+                invariants={inv.invariant_id: inv for inv in (first, second)},
+            ),
+        ),
+        first,
+        second,
+    )
+
+
+def _observed_check(invariant_id):
+    check = Check(
+        check_id="check",
+        invariant_id=invariant_id,
+        method_id="example.Get",
+        scenario_id="scenario",
+        request=(),
+        identities=(),
+    )
+    observation = Observation(
+        check_id=check.check_id,
+        scenario_id="scenario",
+        observed_outcome=AccessOutcome.ALLOWED,
+        response_summary="allowed",
+    )
+    return check, observation
+
+
+def test_provenance_values_attribute_observations_but_keys_select_paths():
+    binding, first, second = _two_norms()
+    check, observation = _observed_check(first.invariant_id)
+    surviving = check.model_copy(
+        update={"invariant_id": second.invariant_id, "method_id": "example.Surviving"}
+    )
+    execution = ExecutionResult(
+        (observation, observation),
+        (check, surviving),
+        {
+            (observation.observation_id, first.invariant_id): ObservationProvenance(
+                None, "historical:first", "step", second.invariant_id
+            ),
+            (observation.observation_id, "foreign:key"): ObservationProvenance(
+                None, "historical:foreign", "step", first.invariant_id
+            ),
+        },
+        {},
+    )
+    scheduler = CoverageDrivenScheduler(binding.execution.paths)
+    rows = {
+        row.norm_id: row
+        for row in build_norm_coverage(binding.execution, execution, scheduler)
+    }
+    assert rows[first.norm_id].path_ids == ("historical:first", "path:0")
+    assert rows[second.norm_id].path_ids == ("path:1",)
+    assert rows[first.norm_id].check_count == rows[second.norm_id].check_count == 2
+    assert rows[first.norm_id].action_ids == ("example.Get",)
+    assert rows[second.norm_id].action_ids == ("example.Get", "example.Surviving")
+
+
+@pytest.mark.parametrize("attribution", ["provenance", "event", "check"])
+def test_observation_attribution_preserves_fallback_and_last_check(attribution):
+    binding, first, second = _two_norms()
+    check, observation = _observed_check(first.invariant_id)
+    surviving = check.model_copy(
+        update={"invariant_id": second.invariant_id, "method_id": "example.Surviving"}
+    )
+    provenance = (
+        {
+            (observation.observation_id, second.invariant_id): ObservationProvenance(
+                None, "history", "step", second.invariant_id
+            )
+        }
+        if attribution == "provenance"
+        else {}
+    )
+    execution = ExecutionResult((observation,), (check, surviving), provenance, {})
+    events = (
+        tuple(
+            CoverageUpdated(
+                check_id=check.check_id,
+                method_id=check.method_id,
+                invariant_id=inv.invariant_id,
+                scenario_id=check.scenario_id,
+                correlation_id=check.check_id,
+            )
+            for inv in (second, first)
+        )
+        if attribution != "check"
+        else ()
+    )
+    rows = {
+        row.norm_id: row
+        for row in build_norm_coverage(
+            binding.execution,
+            execution,
+            CoverageDrivenScheduler(binding.execution.paths),
+            events=events,
+        )
+    }
+    expected = first if attribution == "event" else second
+    assert rows[expected.norm_id].check_count == 1
+    assert sum(row.check_count for row in rows.values()) == 1
+    assert rows[first.norm_id].action_ids == ("example.Get",)
+    assert rows[second.norm_id].action_ids == ("example.Get", "example.Surviving")
+
+
+def test_each_norm_keeps_whole_path_actions_and_duplicate_paths():
+    binding, first, second = _two_norms()
+    a, b = (path.steps[0] for path in binding.execution.paths)
+    b = replace(b, method=b.method.model_copy(update={"method_id": "example.Other"}))
+    path = replace(binding.execution.paths[0], steps=(a, b, a))
+    binding = replace(binding, execution=replace(binding.execution, paths=(path, path)))
+    rows = build_norm_coverage(
+        binding.execution, ExecutionResult((), (), {}, {}), CoverageDrivenScheduler(())
+    )
+    assert len(rows) == 2
+    assert all(row.path_ids == (path.path_id,) and row.path_count == 1 for row in rows)
+    assert all(row.action_ids == ("example.Get", "example.Other") for row in rows)
+
+
+@pytest.mark.parametrize("reason_source", ["step", "path", "policy"])
+def test_blocked_reason_keeps_last_specific_and_lexical_path_order(reason_source):
+    invariant = _changed_invariant()
+    path = _bound_path(invariant)
+    paths = tuple(replace(path, path_id=name) for name in ("a", "z"))
+    binding = _binding(path, invariant)
+    binding = replace(binding, execution=replace(binding.execution, paths=paths))
+    check, observation = _observed_check(invariant.invariant_id)
+    execution = ExecutionResult(
+        (observation,),
+        (check,),
+        {},
+        {
+            (observation.observation_id, invariant.invariant_id): PolicyVerdict(
+                status=VerdictStatus.UNSCOREABLE,
+                confidence=1.0,
+                rationale="policy reason",
+                model_id="test",
+                deterministic=True,
+                grounded=False,
+            ),
+        },
+    )
+    scheduler = CoverageDrivenScheduler(paths)
+    scheduler.state.selections.extend(("a", "z"))
+    events = []
+    if reason_source == "step":
+        for path_id, reason in (
+            ("z", "specific z"),
+            ("z", "QDL step evaluated"),
+            ("a", "later specific a"),
+        ):
+            events.append(
+                QdlStepEvaluated(
+                    path_id=path_id,
+                    step_id="step",
+                    step_index=0,
+                    verdict=VerdictStatus.UNSCOREABLE,
+                    phase="unscoreable",
+                    reason=reason,
+                )
+            )
+    if reason_source != "policy":
+        for path_id, reason in (("z", "blocked z"), ("a", "later blocked a")):
+            events.append(
+                QdlPathEvaluated(
+                    path_id=path_id,
+                    outcome="blocked",
+                    attempted_steps=1,
+                    step_count=1,
+                    probe_count=1,
+                    reason=reason,
+                )
+            )
+    (row,) = build_norm_coverage(binding.execution, execution, scheduler, events=events)
+    assert (
+        row.blocked_reason
+        == {"step": "specific z", "path": "blocked z", "policy": "policy reason"}[
+            reason_source
+        ]
+    )
+
+
+@pytest.mark.parametrize("include_bad_norm", [False, True])
+def test_path_hashing_is_deferred_until_its_norm_row(include_bad_norm, monkeypatch):
+    from cloud_dast.verification import norm_coverage
+
+    binding, first, second = _two_norms()
+    bad_path = replace(
+        binding.execution.paths[1],
+        steps=(
+            replace(
+                binding.execution.paths[1].steps[0],
+                witness_requirement={"unhashable": True},
+            ),
+        ),
+    )
+    invariants = {
+        first.invariant_id: first,
+        **({second.invariant_id: second} if include_bad_norm else {}),
+    }
+    binding = replace(
+        binding,
+        execution=replace(binding.execution, paths=(bad_path,), invariants=invariants),
+    )
+    evaluated = []
+    original = norm_coverage._term_evaluation
+
+    def record(invariant, **kwargs):
+        evaluated.append(invariant.invariant_id)
+        return original(invariant, **kwargs)
+
+    monkeypatch.setattr(norm_coverage, "_term_evaluation", record)
+    args = (
+        binding.execution,
+        ExecutionResult((), (), {}, {}),
+        CoverageDrivenScheduler(()),
+    )
+    if include_bad_norm:
+        with pytest.raises(TypeError, match="unhashable type: 'dict'"):
+            build_norm_coverage(*args)
+    else:
+        (row,) = build_norm_coverage(*args)
+        assert row.norm_id == first.norm_id
+    assert evaluated == [first.invariant_id]
+
+
+def test_event_iterator_failure_precedes_scheduler_access(monkeypatch):
+    binding = _binding(_bound_path(_invariant()))
+
+    def events():
+        raise ValueError("event iterator failed")
+        yield
+
+    def forbidden_read(self):
+        raise AssertionError("scheduler accessed before event materialization")
+
+    monkeypatch.setattr(CoverageDrivenScheduler, "paths", property(forbidden_read))
+    with pytest.raises(ValueError, match="event iterator failed"):
+        build_norm_coverage(
+            binding.execution,
+            ExecutionResult((), (), {}, {}),
+            CoverageDrivenScheduler(()),
+            events=events(),
+        )

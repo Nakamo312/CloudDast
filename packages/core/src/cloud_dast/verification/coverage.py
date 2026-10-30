@@ -38,6 +38,7 @@ from cloud_dast.qdl.graph import (
     QdlGraph,
     Struct,
     Term,
+    Variable,
     canonical_json,
     changed,
     transition,
@@ -52,6 +53,7 @@ from cloud_dast.qdl.reasoning import (
     derivable,
 )
 from cloud_dast.qdl.semantic_norm_compiler import (
+    EXPOSURE_WITNESS_NAMES,
     STATE_TRANSITION_DERIVED_ROLE,
     UNCLASSIFIED_FIELD_ROLE,
     DerivedPrimitiveSupport,
@@ -69,11 +71,6 @@ from cloud_dast.verification.action_runtime import (
     build_action_runtime_ledger,
 )
 from cloud_dast.verification.coverage_models import (
-    _ANY_ACTION,
-    _ANY_EFFECT,
-    _ANY_ROLE,
-    _ANY_TARGET,
-    _EXPOSURE_WITNESS_NAMES,
     _PRIMITIVES,
     evaluate_term_coverage,
 )
@@ -85,6 +82,11 @@ from cloud_dast.verification.norms import (
 
 type StateTransition = tuple[str, str, str]
 type ForbiddenState = tuple[str, str]
+
+_ANY_ACTION = Variable(name="AnyAction")
+_ANY_EFFECT = Variable(name="AnyEffect")
+_ANY_ROLE = Variable(name="AnyRole")
+_ANY_TARGET = Variable(name="AnyTarget")
 
 
 @dataclass(slots=True)
@@ -734,35 +736,6 @@ class Builder:
         return dict(norms)
 
 
-def build_matrix(
-    source: object,
-    *,
-    context: Context = Context.CONTRACT,
-    service: str | None = None,
-    invariants: Mapping[str, InvariantProjection] | None = None,
-    events: Iterable[DomainEvent] | None = None,
-    scope: EventScope | None = None,
-    paths: Iterable[object] = (),
-    planned_paths: Iterable[object] = (),
-    binding_deficits: Iterable[BindingDeficit] = (),
-    finalize_actions: bool = False,
-) -> CoverageMatrix:
-    """Build coverage from the QDL source and optional runtime evidence."""
-
-    return Builder().build(
-        source,
-        context=context,
-        service=service,
-        invariants=invariants,
-        events=events,
-        scope=scope,
-        paths=paths,
-        planned_paths=planned_paths,
-        binding_deficits=binding_deficits,
-        finalize_actions=finalize_actions,
-    )
-
-
 def _requirements_derivable(
     graph: QdlGraph,
     contexts: frozenset[Context],
@@ -962,7 +935,7 @@ def _field_units(
         action, witness = fact.args
         if not isinstance(witness, Struct):
             continue
-        if witness.name not in _EXPOSURE_WITNESS_NAMES or len(witness.args) != 2:
+        if witness.name not in EXPOSURE_WITNESS_NAMES or len(witness.args) != 2:
             continue
         unit_for(
             witness,

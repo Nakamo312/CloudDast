@@ -194,19 +194,9 @@ class PromotionPolicy:
                 )
 
             result = promote_proposal(
-                request.source,
-                request.proposal,
+                request,
                 max_norms=remaining_norms,
                 max_semantic_facts=remaining_semantic_facts,
-                duration_thresholds=request.duration_thresholds,
-                evidence_fields=request.evidence_fields,
-                evidence_refs=request.evidence_refs,
-                action_ids=frozenset(request.action_ids),
-                approved_classifications=request.approved_classifications,
-                runtime_evidence_exempt_predicates=(
-                    request.runtime_evidence_exempt_predicates
-                ),
-                classification_context=request.classification_context,
             )
             self._promoted_norms += len(result.promoted_norms)
             self._promoted_semantic_facts += result.promoted_semantic_facts

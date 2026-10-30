@@ -77,7 +77,7 @@ def _lead_facts(graph: QdlGraph | None) -> tuple[Fact, ...]:
 def test_parked_protected_role_creates_a_lead_norm() -> None:
     source, proposal = _graphs(source_declares_role=False)
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ()
     assert result.parked_classifications is not None
@@ -128,7 +128,7 @@ def test_parked_lead_norm_reaches_the_persisted_proposal_source() -> None:
 def test_source_provenance_creates_no_lead_norm() -> None:
     source, proposal = _graphs(source_declares_role=True)
 
-    result = promote_proposal(source, proposal)
+    result = promote_proposal(ProposalPromotionRequest(source, proposal))
 
     assert result.promoted_norms == ("norm:no-leak",)
     assert result.parked_classifications is None
@@ -139,9 +139,7 @@ def test_observed_evidence_creates_no_lead_norm() -> None:
     source, proposal = _graphs(source_declares_role=False)
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_fields=frozenset({"email"}),
+        ProposalPromotionRequest(source, proposal, evidence_fields=frozenset({"email"}))
     )
 
     assert result.promoted_norms == ("norm:no-leak",)
@@ -168,7 +166,7 @@ def test_unexposed_classification_parks_without_a_lead_norm() -> None:
         facts=tuple(fact for fact in proposal.facts if fact.predicate.name != "exposes")
     )
 
-    result = promote_proposal(source, unexposed)
+    result = promote_proposal(ProposalPromotionRequest(source, unexposed))
 
     assert result.parked_classifications is not None
     assert _lead_facts(result.parked_classifications) == ()

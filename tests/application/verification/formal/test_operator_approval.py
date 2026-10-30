@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from cloud_dast.ports import ApprovalAuditRecord
+from cloud_dast.proposals import ProposalPromotionRequest
 from cloud_dast.qdl.graph import (
     Atom,
     Context,
@@ -248,25 +249,27 @@ def test_operator_provenance_override_is_scoped_to_one_fact_hash() -> None:
     )
 
     result = promote_proposal(
-        source,
-        QdlGraph(
-            facts=(
-                _fact("is", (action, Atom(value="Action")), Context.PROPOSAL),
-                _fact(
-                    "is",
-                    (approved_field, Atom(value="OutputField")),
-                    Context.PROPOSAL,
-                ),
-                _fact(
-                    "is",
-                    (unapproved_field, Atom(value="OutputField")),
-                    Context.PROPOSAL,
-                ),
-                approved,
-                unapproved,
-            )
-        ),
-        approved_classifications=frozenset((approved.content_hash,)),
+        ProposalPromotionRequest(
+            source,
+            QdlGraph(
+                facts=(
+                    _fact("is", (action, Atom(value="Action")), Context.PROPOSAL),
+                    _fact(
+                        "is",
+                        (approved_field, Atom(value="OutputField")),
+                        Context.PROPOSAL,
+                    ),
+                    _fact(
+                        "is",
+                        (unapproved_field, Atom(value="OutputField")),
+                        Context.PROPOSAL,
+                    ),
+                    approved,
+                    unapproved,
+                )
+            ),
+            approved_classifications=frozenset((approved.content_hash,)),
+        )
     )
 
     assert any(

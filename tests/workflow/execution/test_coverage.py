@@ -46,7 +46,6 @@ from cloud_dast.verification.contract_projection import (
 from cloud_dast.verification.coverage import (
     Builder,
     _forbidden_state_cells,
-    build_matrix,
     evaluate_term_coverage,
 )
 from cloud_dast.verification.coverage_models import evidence_target_fact
@@ -111,7 +110,7 @@ def test_field_roles_and_primitives_are_derived_views() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     assert matrix.service == "service:orders"
     assert len(matrix.fields) == 1
@@ -142,7 +141,7 @@ def test_refers_to_derives_object_ref_role_without_capability() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.semantic_role == "object_ref"
@@ -168,7 +167,7 @@ def test_exposure_derives_response_field_capability() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.field_kind == "output"
@@ -198,7 +197,7 @@ def test_one_field_term_keeps_output_and_resource_aspects_separate() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     output_cell = next(
         cell
@@ -231,7 +230,7 @@ def test_field_without_semantic_fact_is_semantic_blind() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     assert len(matrix.blind_spots) == 1
     cell = matrix.blind_spots[0]
@@ -262,7 +261,7 @@ def test_changed_effect_derives_resource_field_and_effect_cells() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     field_cell = next(cell for cell in matrix.fields if cell.field_kind == "resource")
     assert field_cell.semantic_role == "state_transition"
@@ -298,7 +297,7 @@ def test_refers_to_fixture_closes_setup_deficit() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     field_cell = next(cell for cell in matrix.fields if cell.field_kind == "resource")
     assert field_cell.deficit == "evidence_blind"
@@ -328,7 +327,7 @@ def test_create_provider_fixture_closes_setup_deficit() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     effect_cell = next(cell for cell in matrix.effects if cell.effect_kind == "changed")
     assert effect_cell.deficit == "evidence_blind"
@@ -403,7 +402,7 @@ def test_runtime_observation_covers_field_and_effect() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=events,
@@ -482,7 +481,7 @@ def test_runtime_evidence_creates_effect_cell_without_causes_fact() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         invariants={invariant.invariant_id: invariant},
         events=events,
@@ -520,7 +519,7 @@ def test_evidence_target_requires_runtime_observation_fact() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.status == "unresolved"
@@ -559,7 +558,7 @@ def test_evidence_target_fact_binds_runtime_observation() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.status == "covered"
@@ -600,7 +599,7 @@ def test_request_field_execution_is_coverage_evidence() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         events=(
             CheckCompleted(
@@ -630,7 +629,7 @@ def test_declared_field_without_part_still_gets_request_deficit() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     assert len(matrix.fields) == 1
     cell = matrix.fields[0]
@@ -674,7 +673,7 @@ def test_request_deficit_is_independent_of_oracle_status() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         events=(
             CheckCompleted(
@@ -749,7 +748,7 @@ def test_oracle_witness_and_request_execution_are_distinct() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         events=(
             CheckCompleted(
@@ -810,7 +809,7 @@ def test_field_without_oracle_witness_is_unresolved_not_blind() -> None:
         ),
     )
 
-    matrix = build_matrix(
+    matrix = Builder().build(
         graph,
         events=(
             CheckCompleted(
@@ -835,7 +834,7 @@ def test_state_machine_projection_reports_states_not_actions() -> None:
         observed_transitions=(("ship", "created", "shipped"),),
     )
 
-    matrix = build_matrix(state_machine)
+    matrix = Builder().build(state_machine)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -863,7 +862,7 @@ def test_unreachable_state_is_setup_blind() -> None:
         transitions=(("publish", "draft", "published"),),
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -884,7 +883,7 @@ def test_forbidden_state_deficits_are_typed() -> None:
         observed_transitions=(("publish", "draft", "published"),),
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -897,7 +896,7 @@ def test_forbidden_state_deficits_are_typed() -> None:
     assert forbidden.status == "unresolved"
     assert forbidden.deficit == "evidence_blind"
 
-    forbidden_without_initial = build_matrix(
+    forbidden_without_initial = Builder().build(
         state_machine_graph(
             states=("draft", "published"),
             actions=("publish",),
@@ -975,7 +974,7 @@ def test_build_rejects_bare_qdl_plan_without_graph() -> None:
     plan = QdlPlanner().plan(_planned_graph())
 
     with pytest.raises(TypeError, match="coverage source must be a QdlGraph"):
-        build_matrix(plan)
+        Builder().build(plan)
 
 
 # --- S24R: term coverage algebra -------------------------------------------
@@ -1080,7 +1079,7 @@ def test_counter_evidence_units_carry_no_deficit() -> None:
 
 def test_coverage_matrix_projects_generic_terms() -> None:
     graph = _planned_graph()
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     terms = matrix.terms
     kinds = {cell.term_kind for cell in terms}
@@ -1142,7 +1141,7 @@ def test_field_cells_carry_their_factor_state() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.factors is not None
@@ -1187,7 +1186,7 @@ def test_runtime_evidence_does_not_mask_semantic_deficit() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.fields[0]
     assert cell.observation_ids == ("observation:obs-1",)
@@ -1225,7 +1224,7 @@ def test_observed_effect_without_oracle_primitive_is_oracle_blind() -> None:
         )
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     cell = matrix.effects[0]
     assert cell.effect_kind == "create"
@@ -1283,7 +1282,7 @@ def test_proven_unreachable_forbidden_state_is_covered() -> None:
         forbidden_states=(("no_archived", "archived"),),
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -1301,7 +1300,7 @@ def test_observed_unspecified_transition_is_counter_evidence() -> None:
         observed_transitions=(("ship", "created", "shipped"),),
     )
 
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
 
     coverage = matrix.state_machine
     assert coverage is not None
@@ -1459,7 +1458,7 @@ def test_graph_evidence_does_not_expand_the_effect_universe(declared):
             *((qfact("causes", action, effect),) if declared else ()),
         )
     )
-    matrix = build_matrix(graph)
+    matrix = Builder().build(graph)
     assert matrix.effect_summary.total == int(declared)
     if declared:
         (cell,) = matrix.effects

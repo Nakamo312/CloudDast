@@ -16,6 +16,7 @@ from cloud_dast.model import (
     Severity,
     VerdictStatus,
 )
+from cloud_dast.proposals import ProposalPromotionRequest
 from cloud_dast.qdl.graph import (
     Atom,
     Context,
@@ -395,48 +396,56 @@ def test_classification_promotion_accepts_only_the_anchored_value() -> None:
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(witness),
-            allowed_values=frozenset({"sensitive"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(witness),
+                allowed_values=frozenset({"sensitive"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
     untrusted = promote_proposal(
-        QdlGraph(
-            facts=tuple(
-                fact
-                for fact in source.facts
-                if fact.predicate.name not in {"exposes", "has"}
-            )
-        ),
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(witness),
-            allowed_values=frozenset({"sensitive"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            QdlGraph(
+                facts=tuple(
+                    fact
+                    for fact in source.facts
+                    if fact.predicate.name not in {"exposes", "has"}
+                )
+            ),
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(witness),
+                allowed_values=frozenset({"sensitive"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
     rejected = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(
-                field(Atom(value="resource:user"), Atom(value="other"))
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(
+                    field(Atom(value="resource:user"), Atom(value="other"))
+                ),
+                allowed_values=frozenset({"sensitive"}),
+                invariant_id="inv-1",
             ),
-            allowed_values=frozenset({"sensitive"}),
-            invariant_id="inv-1",
-        ),
+        )
     )
     outside_alphabet = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(witness),
-            allowed_values=frozenset({"credential"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(witness),
+                allowed_values=frozenset({"credential"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
 
     assert any(
@@ -487,22 +496,26 @@ def test_classification_promotion_parks_an_anchored_sink_type_without_provenance
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(sink),
-            allowed_values=frozenset({"business_flow"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(sink),
+                allowed_values=frozenset({"business_flow"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
     rejected = promote_proposal(
-        source,
-        proposal,
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(sink),
-            allowed_values=frozenset({"interpreter"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(sink),
+                allowed_values=frozenset({"interpreter"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
 
     assert not any(fact.context is Context.ACCEPTED for fact in result.graph.facts)
@@ -552,14 +565,16 @@ def test_classification_promotion_accepts_trusted_observed_output_role() -> None
     )
 
     result = promote_proposal(
-        source,
-        proposal,
-        evidence_fields=frozenset({"token"}),
-        classification_context=ClassificationPromotionContext(
-            term=canonical_json(witness),
-            allowed_values=frozenset({"sensitive"}),
-            invariant_id="inv-1",
-        ),
+        ProposalPromotionRequest(
+            source,
+            proposal,
+            evidence_fields=frozenset({"token"}),
+            classification_context=ClassificationPromotionContext(
+                term=canonical_json(witness),
+                allowed_values=frozenset({"sensitive"}),
+                invariant_id="inv-1",
+            ),
+        )
     )
 
     assert any(

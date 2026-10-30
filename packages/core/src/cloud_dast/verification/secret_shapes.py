@@ -41,7 +41,7 @@ def secret_shape_graph(
     action_ids: tuple[str, ...],
     evidence: EvidenceView | None,
 ) -> QdlGraph | None:
-    """Classify single-action response values whose shape proves a secret."""
+    """Produce proposal leads from single-action values matching secret shapes."""
 
     if evidence is None or len(action_ids) != 1:
         return None
