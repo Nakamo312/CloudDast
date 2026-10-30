@@ -145,14 +145,14 @@ a module; global acceptance remains incomplete.
 | `differential/comparator.py` | reviewed_validation_pending | Keep timing/concurrency distinct. Exact incomplete-response clone belongs to Kepler shared witness kernel; comparator becomes consumer only after parent agrees kernel. Preserve mixed tree/legacy comparisons; shape uses authoritative tree but value union includes legacy. |
 | `differential/contracts.py` | reviewed_validation_pending | Keep experiment-specific models in verification; do not move wholesale to model or public contracts. _payload_fields_from_baseline is live and behavior-sensitive: deleting its string-field fallback changes readback mutation. Stateless stand policy checks marker only, not isolation guarantee. _profile_factors duplicates ordered factor names with value tuple; bounded getattr comparison could remove ~12-20 LOC, secondary only. |
 | `differential/modes.py` | changed_final_review_pending | Keep distinct timing repeat/minsample and concurrency probe/worker policies despite equal values. Runtime DIFF_MODES now derives from canonical DiffMode Literal via typing.get_args, removing duplicated closed vocabulary: -2physicalLOC. Existing configuration parser pin passes before/after;61projector+differentialtests pass; no new abstraction. |
-| `differential/projection.py` | reviewed_validation_pending | Keep. Preserve action/observation prefixes, paired fact even for zero dimensions, first-occurrence dimension dedup and runtime context. Small atom helpers encode identifier namespaces; generic abstraction adds little. |
-| `differential/report.py` | reviewed_validation_pending | Keep verification ownership (architecture test pins it). Do not move to packages/reporting or merge with Observation/PolicyVerdict. dimensions may explicitly override derived flags, retain duplicates/order in signature; fields signature uses treatment-only fields today. Changing these is a dedup behavior change, not cleanup. |
+| `differential/projection.py` | accepted_unchanged | Accepted unchanged: pure projection of measured dimensions into runtime QDL; pairing, treatment evidence and normalized IDs covered by targeted tests. No I/O/state or structural findings. |
+| `differential/report.py` | accepted_unchanged | Accepted unchanged: paired/aggregate measurement contract, distinct from Observation and presentation reporting. Comparator/timing/concurrency and current evidence consumer tested. Signature remains a coarse identity: different control-only fields may collide; persisted-revision uniqueness is not established here. |
 | `evaluation.py` | reviewed_changes_pending | Consumes read-only evidence view; no own mutable campaign store. Any step/request types obscure existing QdlExecutionStep/LiveRequest contracts; narrow to existing types. Repeated norm compilation and linear readback search need measured shared seam, not new DTOs. |
 | `evidence.py` | independently_reviewed_final_module_acceptance_pending | User-authorized full bounded model context: mandatory masks/role-release params/metadata/logger removed; one representation and detached JSON dump with rendered digest. Keep min1024, UTF8/leaf/string/latest-attempt caps, original digest and explicit malformed budget errors. Worker: retention pin old1fail/new1pass;348focused/2597broad pass;135 boundary cases. Batch-252 production physical/-228 nonblank, tests-100physical. QDL roles and admission/findings unchanged; two benchmark modules unavailable (missing benchmarks.nsfy_bench). Independent review accepts:72adversarial cases strictUTF8 caps,216idempotent reconstructions,10malformed metadata cases rejected, nestedcopies/digests correct,25helper ASTunchanged. Manual views without budget keep prior uncapped behavior; Mapping is readonly by contract, no production mutation found. |
 | `evidence_facts.py` | reviewed_changes_pending | Constructors do not persist or verify by themselves. supports_dataflows is a pure declared-intent gate, not evidence proof; name/document at consumer rather than invent repository. Keep runtime context filter for verified IDs. |
 | `finding_evaluator.py` | moved_pending_final_validation | Stateful publication/replay owner moved to runtime/campaign/evaluation.py using the shared EventProjection; pure decision/merge functions belong to verification/findings.py. F1 gate requires accepted deterministic norm and explicit recorded observation reference. |
 | `findings.py` | reviewed_changes_pending | Fingerprint is root-cause identity, not observation/probe identity. Factory enforces explicit FAIL and check/scenario but not deterministic+grounded+norm+refs; central boundary hardening is semantic and changes tests. |
-| `invariant_projection.py` | reviewed_validation_pending | Keep semantics: Norm identity/severity/action/effect indexes are verification semantics; do not merge into runtime path binding. Naming/boundaries validation pending. |
+| `invariant_projection.py` | accepted_unchanged | Accepted unchanged: owner of binding identity and norm indexes. Mutable index and frozen planned_ids have distinct roles; dedup, action binding and exclusion of proposal transitions verified. No structural findings. |
 | `norm_coverage.py` | independently_reviewed_structural_disposition_pending | Corrected canonical-type/index batch443→397(-46physical,-30code excludingdocstrings),-3Protocols,-5helpers. ExecutionResult/QdlExecutionView canonical;2schedulerprotocols retained. Canonicalprovenance lookup directly, attribution-index ownedsolelybyexistinghelper.21pins/26consumercases/2592rows/9errors/12findingcases+canary/coldimports pass. Independent45comparisons(39returns6errors) accepted; key/value distinction, malformedNone/emptyhistory/wholepathactions/fallback/deferredhash preserved. build115→129 andhelper25→30: remaininglongfunction/sig review notwaived. |
 | `norm_view.py` | merged_pending_final_validation | NormView merged into existing norms.py; distinct validation entrypoints preserved, no re-export shim. 18 production lines and one file removed; focused metadata/error-order and import checks passed. |
 | `norms.py` | reviewed_validation_pending | Keep NormCompilation/NormCompiler for this batch. SemanticNormCompiler creates accepted candidates from grounded semantics; this compiler interprets one accepted fact, so they are not duplicate compilers. QdlInvariant overlaps output but has string norm vs Atom and accepted-path lifecycle; unification needs outside-scope consumer migration. changed maps to marker here but NormView routes changed to differential: intentional tested distinction. |
@@ -177,13 +177,12 @@ a module; global acceptance remains incomplete.
 | `scenarios/matching.py` | removed_pending_review | No shipping consumers except plain permission set difference; inlined at sole grounded oracle; obsolete helper-only tests removed, real oracle has four added permission behavior cases. |
 | `secret_shapes.py` | reviewed_changes_pending | Keep proposal-only heuristic sensor. Corrected docstring: shapes produce proposal leads, never prove a secret/classification. Schema/value leaf walker differs from model evidence path extraction; no forced merge. |
 | `slices.py` | changed_pending_review | Consolidated duplicate runtime model-slice hash into canonical fingerprint, 24 golden values identical; 135 focused tests passed |
-| `spec_projection.py` | reviewed_validation_pending | Keep public feature: Documented recursive input specification is distinct from flat FieldSpec, reused ContractProjector; no artificial wiring/removal. |
+| `spec_projection.py` | accepted_unchanged | Accepted unchanged: README-documented recursive specification adapter. Recursive SpecField differs from flat FieldSpec; nested projection and shared contract report verified. No I/O/campaign state or structural findings. |
 | `state_machine_ingestion.py` | moved_pending_review | Existing state and contract ingestion moved into runtime/ingestion.py, body/summary AST equivalent, 311 focused tests and 27 contracts passed; no summary or source_id policy merge. |
 | `taxonomy/__init__.py` | reviewed_changes_pending | Used by finding construction, runtime deficits and metrics. No independent state. |
 | `taxonomy/catalog.py` | reviewed_changes_pending | Consolidate repeated norm/candidate selection; constant -len(_constraint_count(entry)) is a correctness issue, not safe cleanup. Keep residual algebra shared between matching and diagnostics; runtime consumes catalog candidate vocabulary. Import-time package YAML is configuration I/O, not persistence. |
 | `threat_model.py` | changed_pending_review | Test-only StrideView/Category moved to existing tests/support/threat_model.py; no production consumers or dynamic registrations found; no production runtime behavior added or removed. |
 | `witness.py` | reviewed_changes_pending | Own shared completeness, echo, response-values and witness-path helpers here. Keep extraction separate from verdict and from transport. Signature claims value-free but includes marker/delta; adjust documentation or explicit consumers after review. Corrected signature docstring: keys include timingdelta/marker, not value-free. Executable bodies still identical tobase; only this docstring differs. |
-
 
 ## Remaining work and limits
 
@@ -191,8 +190,9 @@ Structural checks still report 26 complexity, 17 namespace, 16 length, nine
 signature and one import-block findings. Assess them against responsibility and
 canonical contracts; do not add DTOs, aliases or helper files merely to silence
 rules. Large promotion, coverage, projection, slices and taxonomy routines remain
-part of this goal. Four unchanged projection modules are undergoing final semantic
-acceptance review. The full per-module disposition and final broad review remain.
+part of this goal. Four unchanged projection modules are accepted after 75 targeted tests and
+13 contract probes: differential projection/report, invariant projection and
+spec projection. The full per-module disposition and final broad review remain.
 
 Characterized limitations are not silently repaired under cleanup:
 
@@ -209,6 +209,8 @@ Characterized limitations are not silently repaired under cleanup:
 - Finalization omits recovery paths in one coverage call. A pure-seam difference
   is characterized, but reachability with an incomplete shipping event stream
   remains unproved.
+- DiffReport.signature can merge distinct control-only fields. It is a coarse
+  identity, not a proved content hash for persisted revisions.
 - Existing duration decoders treat float budgets as incomplete and accept
   negative integer budgets. This requires a separate policy decision, not an
   unannounced dedup change.
